@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(openspec list:*)",
+      "WebSearch",
+      "Skill(opsx:propose)",
+      "Bash(openspec new change:*)",
+      "Bash(openspec status:*)",
+      "Bash(openspec instructions:*)",
+      "Bash(where:*)",
+      "Bash(python -m pip list:*)",
+      "Bash(findstr:*)",
+      "Bash(python -m pip install:*)",
+      "Bash(python:*)",
+      "Bash(timeout:*)",
+      "Bash(node:*)",
+      "Bash(npm --version)",
+      "Bash(uvicorn:*)",
+      "Bash(npm run dev)",
+      "Bash(npx vite build)",
+      "Bash(.back-starter.bat:*)",
+      "Bash(cmd /c:*)",
+      "Bash(curl:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(powershell:*)",
+      "Bash(tasklist:*)",
+      "Bash(netstat:*)",
+      "Bash(npx:*)",
+      "Bash(npm ls:*)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npm view:*)",
+      "Bash(npm install:*)",
+      "Bash(openspec:*)",
+      "Bash(echo:*)",
+      "Bash(C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe:*)"
+    ]
+  }
+}
