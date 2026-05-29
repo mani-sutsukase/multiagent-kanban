@@ -26,6 +26,10 @@ class CardResponse(BaseModel):
     status: str
     session_id: Optional[str] = None
     rejection_note: Optional[str] = None
+    result: Optional[str] = None
+    last_prompt: Optional[str] = None
+    last_output: Optional[str] = None
+    user_reply: Optional[str] = None
     created_at: str
     updated_at: str
 
@@ -38,3 +42,8 @@ class CardStatusResponse(BaseModel):
     status: str
     current_swimlane_id: Optional[str] = None
     session_id: Optional[str] = None
+    result: Optional[str] = None
+
+
+class ReplyRequest(BaseModel):
+    reply: str

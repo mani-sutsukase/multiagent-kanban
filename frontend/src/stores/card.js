@@ -40,15 +40,37 @@ export const useCardStore = defineStore('card', {
         this.cards[kanbanId] = this.cards[kanbanId].filter((c) => c.id !== id)
       }
     },
-    updateCardStatus(cardId, status, swimlaneId) {
+    updateCardStatus(cardId, status, swimlaneId, result) {
       for (const kanbanId in this.cards) {
         const card = this.cards[kanbanId].find((c) => c.id === cardId)
         if (card) {
           card.status = status
           if (swimlaneId !== undefined) card.current_swimlane_id = swimlaneId
+          if (result !== undefined) card.result = result
           break
         }
       }
+    },
+    async reply(cardId, replyText) {
+      const res = await cardApi.reply(cardId, replyText)
+      // 更新本地数据
+      for (const kanbanId in this.cards) {
+        const idx = this.cards[kanbanId].findIndex((c) => c.id === cardId)
+        if (idx >= 0) {
+          this.cards[kanbanId][idx] = res.data
+        }
+      }
+      return res.data
+    },
+    async advance(cardId) {
+      const res = await cardApi.advance(cardId)
+      for (const kanbanId in this.cards) {
+        const idx = this.cards[kanbanId].findIndex((c) => c.id === cardId)
+        if (idx >= 0) {
+          this.cards[kanbanId][idx] = res.data
+        }
+      }
+      return res.data
     },
   },
 })

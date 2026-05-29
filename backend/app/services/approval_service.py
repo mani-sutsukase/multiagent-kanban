@@ -76,6 +76,7 @@ class ApprovalService:
                 "card_id": card_id,
                 "status": new_card.status,
                 "swimlane_id": new_card.current_swimlane_id,
+                "result": new_card.result,
             })
             if new_card.status == "completed":
                 await ws_manager.broadcast({
@@ -114,6 +115,7 @@ class ApprovalService:
                 "card_id": card_id,
                 "status": "running",
                 "swimlane_id": card.current_swimlane_id,
+                "result": None,
             })
 
         return updated_card

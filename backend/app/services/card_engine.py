@@ -30,14 +30,16 @@ class CardEngine:
             card.kanban_id, swimlane.sort_order
         )
         if not next_swimlane:
-            # 最后一个泳道，标记为完成，但保留在最后一个泳道中展示
+            # 最后一个泳道，标记为完成
             card.status = "completed"
+            card.result = "任务执行成功：任务已完成"
         else:
-            # 进入下一个泳道
+            # 进入下一个泳道，清除当前泳道的执行结果
             card.current_swimlane_id = next_swimlane.id
             card.status = "pending"
             card.session_id = None
             card.rejection_note = None
+            card.result = None
 
         await self.db.commit()
         await self.db.refresh(card)
@@ -63,9 +65,10 @@ class CardEngine:
         return await self.advance_to_next_swimlane(card)
 
     async def handle_rejection(self, card: Card, rejection_note: str) -> Card:
-        """驳回后重置卡片状态为 running，保存 rejection_note"""
+        """驳回后重置卡片状态为 running，保存 rejection_note，清除旧执行结果"""
         card.status = "running"
         card.rejection_note = rejection_note
+        card.result = None
         await self.db.commit()
         await self.db.refresh(card)
         return card

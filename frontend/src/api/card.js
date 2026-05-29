@@ -6,4 +6,6 @@ export const cardApi = {
   create: (kanbanId, data) => client.post(`/kanbans/${kanbanId}/cards`, data),
   update: (id, data) => client.put(`/cards/${id}`, data),
   delete: (id) => client.delete(`/cards/${id}`),
+  reply: (id, reply) => client.post(`/cards/${id}/reply`, { reply }),
+  advance: (id) => client.post(`/cards/${id}/advance`),
 }

@@ -20,14 +20,46 @@
           ⚙️ 设置
         </router-link>
       </nav>
-      <div class="countdown-section">
-        <div class="countdown-divider"></div>
-        <div class="countdown-label">⏱ {{ nearestSchedule ? '下一任务' : '检查轮询' }}</div>
-        <div class="countdown-time">{{ countdownText }}</div>
-        <div class="countdown-name">{{ nearestSchedule ? nearestSchedule.name : '等待定时任务...' }}</div>
+      <div class="sidebar-footer">
+        <div class="countdown-section">
+          <div class="countdown-divider"></div>
+          <div class="countdown-label">⏱ {{ nearestSchedule ? '下一任务' : '检查轮询' }}</div>
+          <div class="countdown-time">{{ countdownText }}</div>
+          <div class="countdown-name">{{ nearestSchedule ? nearestSchedule.name : '等待定时任务...' }}</div>
+        </div>
+        <div class="connection-section">
+          <div class="connection-status" :class="{ disconnected: !isConnected }">
+            <span class="connection-dot"></span>
+            <span class="connection-text">{{ isConnected ? '已连接' : '已断开' }}</span>
+          </div>
+          <button class="btn-restart" :disabled="serverRestarting" @click="handleRestart">
+            {{ serverRestarting ? '重启中...' : '重启服务器' }}
+          </button>
+        </div>
       </div>
     </aside>
     <main class="main-content">
+      <!-- 断连遮罩 -->
+      <div v-if="showDisconnectOverlay" class="disconnect-overlay">
+        <div class="disconnect-card">
+          <div class="disconnect-icon">⚠️</div>
+          <div class="disconnect-title">服务器连接已断开</div>
+          <div class="disconnect-desc">
+            {{ serverRestarting ? '正在等待服务器重启，请稍候...' : '请检查服务器是否正常运行，或点击下方按钮重启' }}
+          </div>
+          <button
+            v-if="!serverRestarting"
+            class="btn btn-restart-lg"
+            @click="handleRestart"
+          >
+            重启服务器
+          </button>
+          <div v-else class="restart-spinner">
+            <span class="spinner"></span>
+            <span>正在连接...</span>
+          </div>
+        </div>
+      </div>
       <router-view />
     </main>
   </div>
@@ -40,17 +72,25 @@ import { useScheduleStore } from '../stores/schedule'
 import { useSettingStore } from '../stores/setting'
 import { useWebSocket } from '../composables/useWebSocket'
 import { useCardStore } from '../stores/card'
+import { useConnection } from '../composables/useConnection'
 
 const approvalStore = useApprovalStore()
 const cardStore = useCardStore()
 const scheduleStore = useScheduleStore()
 const settingStore = useSettingStore()
-const { connect, on, off } = useWebSocket()
+const { connect, on, off, connected: wsConnected } = useWebSocket()
+const { apiConnected, serverRestarting, startHealthPing, restartServer } = useConnection()
 
 const countdownText = ref('00:05')
 let countdownTimer = null
 let refreshTimer = null
 let pollSeconds = 5
+
+// 整体连接状态：API 和 WebSocket 都通才算已连接
+const isConnected = computed(() => apiConnected.value && wsConnected.value)
+
+// 断连遮罩：API 不通时显示
+const showDisconnectOverlay = computed(() => !apiConnected.value)
 
 function getPollInterval() {
   return parseInt(settingStore.get('polling_interval', '5')) || 5
@@ -114,9 +154,10 @@ onMounted(async () => {
   await settingStore.fetchAll()
   pollSeconds = getPollInterval()
   connect()
+  startHealthPing()
 
   on('card_status_changed', (msg) => {
-    cardStore.updateCardStatus(msg.card_id, msg.status, msg.swimlane_id)
+    cardStore.updateCardStatus(msg.card_id, msg.status, msg.swimlane_id, msg.result)
   })
 
   on('card_needs_approval', () => {
@@ -135,6 +176,10 @@ onMounted(async () => {
     settingStore.fetchAll()
   }, 60000)
 })
+
+function handleRestart() {
+  restartServer()
+}
 
 onUnmounted(() => {
   off('card_status_changed')
@@ -245,5 +290,140 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 0 20px 16px;
+}
+
+.connection-section {
+  padding-top: 12px;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.connection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #27ae60;
+  transition: background 0.3s;
+}
+
+.connection-status.disconnected .connection-dot {
+  background: #e74c3c;
+}
+
+.connection-text {
+  font-size: 12px;
+  color: #999;
+}
+
+.connection-status.disconnected .connection-text {
+  color: #e74c3c;
+}
+
+.btn-restart {
+  width: 100%;
+  padding: 6px 12px;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: transparent;
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-restart:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #888;
+  color: #fff;
+}
+
+.btn-restart:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 断连遮罩 */
+.disconnect-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.disconnect-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  max-width: 400px;
+}
+
+.disconnect-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.disconnect-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #2c3e50;
+  margin-bottom: 12px;
+}
+
+.disconnect-desc {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.btn-restart-lg {
+  padding: 10px 32px;
+  background: #3498db;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-restart-lg:hover {
+  background: #2980b9;
+}
+
+.restart-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #666;
+  font-size: 14px;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 3px solid #ddd;
+  border-top-color: #3498db;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

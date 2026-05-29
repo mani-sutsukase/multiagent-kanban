@@ -41,8 +41,7 @@ class CardService:
         if not card:
             return None
         for key, value in kwargs.items():
-            if value is not None:
-                setattr(card, key, value)
+            setattr(card, key, value)
         await self.db.commit()
         await self.db.refresh(card)
         return card

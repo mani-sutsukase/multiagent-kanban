@@ -25,6 +25,7 @@ async def list_kanbans(db: AsyncSession = Depends(get_db)):
             briefs.append(SwimlaneBrief(
                 id=s.id, name=s.name, sort_order=s.sort_order,
                 flow_mode=s.flow_mode, local_path=s.local_path, card_count=0,
+                wait_for_reply=s.wait_for_reply,
             ))
         result.append(KanbanResponse(
             id=k.id, name=k.name, description=k.description or "",
@@ -60,6 +61,7 @@ async def get_kanban(kanban_id: str, db: AsyncSession = Depends(get_db)):
             id=s.id, name=s.name, sort_order=s.sort_order,
             prompt=s.prompt, skill=s.skill, tools=s.tools,
             flow_mode=s.flow_mode, local_path=s.local_path, card_count=0,
+            wait_for_reply=s.wait_for_reply,
         ))
     return KanbanResponse(
         id=kanban.id, name=kanban.name, description=kanban.description or "",
@@ -101,12 +103,12 @@ async def add_swimlane(kanban_id: str, data: SwimlaneCreate,
         raise HTTPException(status_code=404, detail="看板不存在")
     s = await service.add_swimlane(
         kanban_id, data.name, data.prompt, data.skill, data.tools, data.flow_mode,
-        local_path=data.local_path,
+        local_path=data.local_path, wait_for_reply=data.wait_for_reply,
     )
     return SwimlaneResponse(
         id=s.id, kanban_id=s.kanban_id, name=s.name, sort_order=s.sort_order,
         prompt=s.prompt, skill=s.skill, tools=s.tools, flow_mode=s.flow_mode,
-        local_path=s.local_path,
+        local_path=s.local_path, wait_for_reply=s.wait_for_reply,
         created_at=s.created_at, updated_at=s.updated_at,
     )
 
@@ -118,14 +120,14 @@ async def update_swimlane(swimlane_id: str, data: SwimlaneUpdate,
     s = await service.update(
         swimlane_id, name=data.name, prompt=data.prompt,
         skill=data.skill, tools=data.tools, flow_mode=data.flow_mode,
-        local_path=data.local_path,
+        local_path=data.local_path, wait_for_reply=data.wait_for_reply,
     )
     if not s:
         raise HTTPException(status_code=404, detail="泳道不存在")
     return SwimlaneResponse(
         id=s.id, kanban_id=s.kanban_id, name=s.name, sort_order=s.sort_order,
         prompt=s.prompt, skill=s.skill, tools=s.tools, flow_mode=s.flow_mode,
-        local_path=s.local_path,
+        local_path=s.local_path, wait_for_reply=s.wait_for_reply,
         created_at=s.created_at, updated_at=s.updated_at,
     )
 

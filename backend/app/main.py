@@ -47,12 +47,14 @@ async def _safe_execute_card(card: Card, swimlane: Swimlane):
         raise
     except Exception:
         import traceback
-        traceback.print_exc()
-        # 未知异常：将卡片设为 blocked
+        tb_text = traceback.format_exc()
+        print(tb_text)
+        # 未知异常：将卡片设为 blocked，写入失败原因
         async with async_session_factory() as db:
             db_card = await db.get(Card, card.id)
             if db_card and db_card.status == "running":
                 db_card.status = "blocked"
+                db_card.result = f"任务执行失败：系统内部错误\n{tb_text[:2000]}"
                 await db.commit()
 
 
@@ -157,13 +159,13 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # 注册 REST 路由
-from app.routers import kanbans, cards, approvals, logs, schedules, settings, browse
+from app.routers import kanbans, cards, approvals, logs, schedules, settings as settings_router, browse
 app.include_router(kanbans.router)
 app.include_router(cards.router)
 app.include_router(approvals.router)
 app.include_router(logs.router)
 app.include_router(schedules.router)
-app.include_router(settings.router)
+app.include_router(settings_router.router)
 app.include_router(browse.router)
 
 
@@ -198,3 +200,20 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.post("/api/restart")
+async def restart_server():
+    """触发 uvicorn --reload 热重启（touch main.py 文件时间戳）"""
+    import os
+    import asyncio
+    from pathlib import Path
+
+    async def _do_restart():
+        await asyncio.sleep(0.5)
+        # 更新 main.py 的修改时间，uvicorn 的 --reload 检测到变化后自动重启子进程
+        file_path = Path(__file__)
+        os.utime(file_path, None)
+
+    asyncio.create_task(_do_restart())
+    return {"message": "服务器正在重启..."}

@@ -25,9 +25,13 @@ class Card(Base):
     model = Column(String, nullable=False)
     current_swimlane_id = Column(String, ForeignKey("swimlanes.id"), nullable=True)
     status = Column(String, nullable=False, default="pending")
-    # pending | running | waiting_approval | approved | rejected | completed | blocked
+    # pending | running | waiting_approval | approved | rejected | waiting_for_reply | completed | blocked
     session_id = Column(String, nullable=True)
     rejection_note = Column(Text, nullable=True)
+    result = Column(Text, nullable=True)  # 执行结果：成功描述或失败原因
+    last_prompt = Column(Text, nullable=True)  # 最近一次发送给 claude 的提示词
+    last_output = Column(Text, nullable=True)  # 最近一次 claude 输出的内容
+    user_reply = Column(Text, nullable=True)   # 用户对 claude 的回复
     created_at = Column(String, nullable=False, default=_utcnow)
     updated_at = Column(String, nullable=False, default=_utcnow, onupdate=_utcnow)
 
