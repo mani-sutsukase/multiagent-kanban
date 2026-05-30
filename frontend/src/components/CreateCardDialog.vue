@@ -56,14 +56,18 @@
             </div>
             <div class="form-group">
               <label>额外可访问路径</label>
-              <div v-for="(ap, idx) in allowedPathsArr" :key="idx" class="extra-path-row">
-                <input v-model="ap.path" class="extra-path-input" placeholder="D:\other\path" />
-                <button class="btn-sm btn-browse" type="button" @click="openExtraPathBrowser(ap)">选择</button>
-                <select v-model="ap.permission" class="perm-select">
-                  <option value="read_write">读写</option>
-                  <option value="read_only">只读</option>
-                </select>
-                <button class="btn-sm btn-danger" type="button" @click="allowedPathsArr.splice(idx, 1)">×</button>
+              <div v-for="(ap, idx) in allowedPathsArr" :key="idx" class="extra-path-block">
+                <div class="path-row">
+                  <input v-model="ap.path" placeholder="例如 D:\other\project" />
+                  <button class="btn-sm btn-browse" type="button" @click="openExtraPathBrowser(ap)">选择</button>
+                </div>
+                <div class="permission-row">
+                  <select v-model="ap.permission" class="perm-select">
+                    <option value="read_write">读写权限</option>
+                    <option value="read_only">只读权限</option>
+                  </select>
+                  <button class="btn-sm btn-danger" type="button" @click="allowedPathsArr.splice(idx, 1)">× 删除</button>
+                </div>
               </div>
               <button class="btn-sm btn-browse" type="button" @click="allowedPathsArr.push({ path: '', permission: 'read_only' })">+ 添加路径</button>
             </div>
@@ -290,8 +294,7 @@ h2 { margin-bottom: 20px; font-size: 18px; color: #2c3e50; }
 .collapse-header { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 8px 0; user-select: none; }
 .collapse-header:hover { color: #3498db; }
 .collapse-body { padding: 12px; background: #f8f9fa; border-radius: 8px; margin-top: 4px; }
-.extra-path-row { display: flex; gap: 6px; margin-bottom: 6px; }
-.extra-path-input { flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+.extra-path-block { margin-bottom: 10px; padding: 8px; background: #fff; border: 1px solid #eee; border-radius: 6px; }
 .perm-select { font-size: 12px; padding: 3px 6px; border: 1px solid #ddd; border-radius: 4px; }
 .btn-sm { padding: 4px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; }
 .btn-danger { background: #fadbd8; color: #e74c3c; }
@@ -304,6 +307,7 @@ h2 { margin-bottom: 20px; font-size: 18px; color: #2c3e50; }
 
 .path-row { display: flex; gap: 6px; }
 .path-row input { flex: 1; }
+.permission-row { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
 
 /* 目录浏览器 */
 .browser-overlay { z-index: 200; }
