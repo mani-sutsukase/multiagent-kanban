@@ -32,6 +32,9 @@ class Card(Base):
     last_prompt = Column(Text, nullable=True)  # 最近一次发送给 claude 的提示词
     last_output = Column(Text, nullable=True)  # 最近一次 claude 输出的内容
     user_reply = Column(Text, nullable=True)   # 用户对 claude 的回复
+    local_path = Column(String, nullable=True)           # 卡片级工作目录
+    local_path_permission = Column(String, nullable=False, default="read_write")  # read_only / read_write
+    allowed_paths = Column(Text, nullable=False, default="[]")  # JSON: [{"path":"...","permission":"read_only"|"read_write"}]
     created_at = Column(String, nullable=False, default=_utcnow)
     updated_at = Column(String, nullable=False, default=_utcnow, onupdate=_utcnow)
 
