@@ -23,6 +23,7 @@ class Log(Base):
     swimlane_id = Column(String, ForeignKey("swimlanes.id"), nullable=False)
     attempt = Column(Integer, nullable=False, default=1)
     process_id = Column(Integer, nullable=True)
+    prompt = Column(Text, nullable=True)  # 发送给 Claude 的提示词
     stdout = Column(Text, default="")
     stderr = Column(Text, default="")
     exit_code = Column(Integer, nullable=True)

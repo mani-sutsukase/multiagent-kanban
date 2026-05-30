@@ -72,5 +72,15 @@ export const useCardStore = defineStore('card', {
       }
       return res.data
     },
+    async move(cardId, targetSwimlaneId) {
+      const res = await cardApi.move(cardId, targetSwimlaneId)
+      for (const kanbanId in this.cards) {
+        const idx = this.cards[kanbanId].findIndex((c) => c.id === cardId)
+        if (idx >= 0) {
+          this.cards[kanbanId][idx] = res.data
+        }
+      }
+      return res.data
+    },
   },
 })

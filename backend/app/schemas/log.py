@@ -8,6 +8,7 @@ class LogResponse(BaseModel):
     swimlane_id: str
     attempt: int
     process_id: Optional[int] = None
+    prompt: Optional[str] = None
     stdout: str = ""
     stderr: str = ""
     exit_code: Optional[int] = None

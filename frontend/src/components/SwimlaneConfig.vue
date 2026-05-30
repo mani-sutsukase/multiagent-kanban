@@ -36,7 +36,25 @@
                 <input v-model="swimlane.local_path" placeholder="留空使用全局配置，例如 D:\my-project" />
                 <button class="btn-sm btn-browse" type="button" @click="openBrowser(swimlane)">选择</button>
               </div>
-              <span class="field-hint">配置后将在该目录启动 Claude，使用该目录的 CLAUDE.md 等配置</span>
+              <div class="permission-row">
+                <span class="field-hint">配置后将在该目录启动 Claude，使用该目录的 CLAUDE.md 等配置</span>
+                <select v-model="swimlane.local_path_permission" class="permission-select">
+                  <option value="read_write">读写权限</option>
+                  <option value="read_only">只读权限</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group extra-paths">
+              <label>额外可访问路径</label>
+              <div v-for="(ap, apIdx) in swimlane.allowed_paths_arr" :key="apIdx" class="extra-path-row">
+                <input v-model="ap.path" class="extra-path-input" placeholder="D:\other\path" />
+                <select v-model="ap.permission" class="permission-select">
+                  <option value="read_write">读写</option>
+                  <option value="read_only">只读</option>
+                </select>
+                <button class="btn-sm btn-danger" type="button" @click="removeExtraPath(swimlane, apIdx)">×</button>
+              </div>
+              <button class="btn-sm btn-browse" type="button" @click="addExtraPath(swimlane)">+ 添加路径</button>
             </div>
           </div>
         </div>
@@ -102,6 +120,36 @@ const deleting = ref(false)
 
 const localSwimlanes = ref(JSON.parse(JSON.stringify(props.swimlanes)))
 
+// 为每个泳道初始化路径权限字段
+localSwimlanes.value.forEach(sw => {
+  if (!sw.local_path_permission) sw.local_path_permission = 'read_write'
+  if (!sw.allowed_paths) sw.allowed_paths = '[]'
+  parseAllowedPaths(sw)
+})
+
+// 路径权限工具函数
+function parseAllowedPaths(sw) {
+  try {
+    const parsed = JSON.parse(sw.allowed_paths || '[]')
+    sw.allowed_paths_arr = Array.isArray(parsed) ? parsed : []
+  } catch {
+    sw.allowed_paths_arr = []
+  }
+}
+
+function serializeAllowedPaths(sw) {
+  sw.allowed_paths = JSON.stringify(sw.allowed_paths_arr || [])
+}
+
+function addExtraPath(swimlane) {
+  if (!swimlane.allowed_paths_arr) swimlane.allowed_paths_arr = []
+  swimlane.allowed_paths_arr.push({ path: '', permission: 'read_only' })
+}
+
+function removeExtraPath(swimlane, idx) {
+  swimlane.allowed_paths_arr.splice(idx, 1)
+}
+
 // 目录浏览器状态
 const browserTarget = ref(null)
 const browserPath = ref('')
@@ -148,6 +196,9 @@ function addSwimlane() {
     tools: '[]',
     flow_mode: 'auto',
     local_path: '',
+    local_path_permission: 'read_write',
+    allowed_paths: '[]',
+    allowed_paths_arr: [],
   })
 }
 
@@ -167,6 +218,7 @@ async function deleteSwimlane(id) {
 
 async function save() {
   for (const s of localSwimlanes.value) {
+    serializeAllowedPaths(s)
     if (s.id.startsWith('__new__')) {
       await kanbanStore.addSwimlane(props.kanbanId, {
         name: s.name,
@@ -174,6 +226,9 @@ async function save() {
         skill: s.skill || null,
         flow_mode: s.flow_mode,
         local_path: s.local_path || null,
+        wait_for_reply: s.wait_for_reply || '0',
+        local_path_permission: s.local_path_permission || 'read_write',
+        allowed_paths: s.allowed_paths || '[]',
       })
     } else {
       await kanbanStore.updateSwimlane(s.id, {
@@ -182,6 +237,9 @@ async function save() {
         skill: s.skill || null,
         flow_mode: s.flow_mode,
         local_path: s.local_path || null,
+        wait_for_reply: s.wait_for_reply || '0',
+        local_path_permission: s.local_path_permission || 'read_write',
+        allowed_paths: s.allowed_paths || '[]',
       })
     }
   }
@@ -218,6 +276,11 @@ h2 { margin-bottom: 20px; font-size: 18px; color: #2c3e50; }
 
 .path-row { display: flex; gap: 6px; }
 .path-row input { flex: 1; }
+.permission-row { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+.permission-select { font-size: 12px; padding: 3px 6px; border: 1px solid #ddd; border-radius: 4px; }
+.extra-paths { margin-top: 8px; }
+.extra-path-row { display: flex; gap: 6px; margin-bottom: 6px; }
+.extra-path-input { flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; outline: none; }
 
 /* 目录浏览器 */
 .browser-overlay { z-index: 200; }

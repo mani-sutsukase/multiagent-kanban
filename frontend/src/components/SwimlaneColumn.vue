@@ -5,7 +5,14 @@
       <span class="flow-badge" :class="swimlane.flow_mode">{{ flowLabel }}</span>
     </div>
 
-    <div class="cards-container">
+    <div
+      class="cards-container"
+      :class="{ 'drag-over': isDragOver }"
+      @dragover.prevent="onDragOver"
+      @dragenter.prevent="onDragEnter"
+      @dragleave="onDragLeave"
+      @drop="onDrop"
+    >
       <div v-if="!kanbanCards || kanbanCards.length === 0" class="empty-cards">
         暂无卡片
       </div>
@@ -20,7 +27,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useCardStore } from '../stores/card'
 import CardItem from './CardItem.vue'
 
@@ -29,8 +36,47 @@ const props = defineProps({
   kanbanId: String,
 })
 
-const emit = defineEmits(['cardClick'])
+const emit = defineEmits(['cardClick', 'cardMoved'])
 const cardStore = useCardStore()
+
+const isDragOver = ref(false)
+let dragEnterCount = 0
+
+function onDragOver(e) {
+  e.dataTransfer.dropEffect = 'move'
+}
+
+function onDragEnter(e) {
+  dragEnterCount++
+  isDragOver.value = true
+}
+
+function onDragLeave(e) {
+  dragEnterCount--
+  if (dragEnterCount <= 0) {
+    dragEnterCount = 0
+    isDragOver.value = false
+  }
+}
+
+async function onDrop(e) {
+  isDragOver.value = false
+  dragEnterCount = 0
+  const cardId = e.dataTransfer.getData('text/plain')
+  if (!cardId) return
+
+  // 检查是否拖到了不同的泳道
+  const allCards = cardStore.cards[props.kanbanId] || []
+  const card = allCards.find((c) => c.id === cardId)
+  if (!card || card.current_swimlane_id === props.swimlane.id) return
+
+  try {
+    await cardStore.move(cardId, props.swimlane.id)
+    emit('cardMoved', { cardId, swimlaneId: props.swimlane.id })
+  } catch (e) {
+    console.error('移动卡片失败:', e)
+  }
+}
 
 const flowLabel = computed(() => {
   const labels = { auto: '自动', pre_approval: '执行后审批', post_approval: '执行前审批' }
@@ -49,8 +95,8 @@ function showCardDetail(card) {
 
 <style scoped>
 .swimlane-column {
-  min-width: 280px;
-  max-width: 320px;
+  min-width: 310px;
+  max-width: 360px;
   background: #f0f2f5;
   border-radius: 12px;
   padding: 12px;
@@ -88,6 +134,16 @@ function showCardDetail(card) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  transition: background-color 0.2s, border-color 0.2s;
+  border-radius: 8px;
+  padding: 4px;
+  margin: -4px;
+}
+
+.cards-container.drag-over {
+  background-color: #e8f4fd;
+  border: 2px dashed #3498db;
+  padding: 2px;
 }
 
 .empty-cards {

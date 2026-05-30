@@ -9,13 +9,15 @@ class LogService:
         self.db = db
 
     async def create_log(self, card_id: str, swimlane_id: str, attempt: int = 1,
-                         process_id: int = None, session_id: str = None) -> Log:
+                         process_id: int = None, session_id: str = None,
+                         prompt: str = None) -> Log:
         log = Log(
             card_id=card_id,
             swimlane_id=swimlane_id,
             attempt=attempt,
             process_id=process_id,
             session_id=session_id,
+            prompt=prompt,
             started_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
         )
         self.db.add(log)

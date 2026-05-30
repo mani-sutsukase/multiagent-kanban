@@ -1,5 +1,12 @@
 <template>
-  <div class="card-item" :class="card.status" @click="$emit('click')">
+  <div
+    class="card-item"
+    :class="[card.status, { dragging: isDragging }]"
+    draggable="true"
+    @click="$emit('click')"
+    @dragstart="onDragStart"
+    @dragend="onDragEnd"
+  >
     <div class="card-title">{{ card.title }}</div>
     <div class="card-meta">
       <span class="status-badge" :class="card.status">{{ statusLabel }}</span>
@@ -39,6 +46,25 @@ const props = defineProps({
 })
 
 defineEmits(['click'])
+
+const isDragging = ref(false)
+
+function onDragStart(e) {
+  isDragging.value = true
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', props.card.id)
+  // 让拖拽时显示半透明效果
+  if (e.target) {
+    e.target.style.opacity = '0.5'
+  }
+}
+
+function onDragEnd(e) {
+  isDragging.value = false
+  if (e.target) {
+    e.target.style.opacity = ''
+  }
+}
 
 const logs = ref([])
 const loadingLog = ref(false)
@@ -113,8 +139,8 @@ onMounted(fetchLogs)
 <style scoped>
 .card-item {
   background: #fff;
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 10px;
+  padding: 14px 16px;
   cursor: pointer;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   transition: box-shadow 0.2s;
@@ -124,31 +150,36 @@ onMounted(fetchLogs)
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
+.card-item.dragging {
+  opacity: 0.5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .card-item.running {
-  border-left: 3px solid #3498db;
+  border-left: 4px solid #3498db;
 }
 
 .card-item.waiting_approval {
-  border-left: 3px solid #f39c12;
+  border-left: 4px solid #f39c12;
 }
 
 .card-item.waiting_for_reply {
-  border-left: 3px solid #8e44ad;
+  border-left: 4px solid #8e44ad;
 }
 
 .card-item.completed {
-  border-left: 3px solid #27ae60;
+  border-left: 4px solid #27ae60;
 }
 
 .card-item.blocked {
-  border-left: 3px solid #e74c3c;
+  border-left: 4px solid #e74c3c;
 }
 
 .card-title {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: #2c3e50;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   word-break: break-all;
 }
 

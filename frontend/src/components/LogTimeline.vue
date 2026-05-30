@@ -23,6 +23,10 @@
         </div>
 
         <div v-if="expandedId === log.id" class="log-content">
+          <div v-if="log.prompt" class="log-block">
+            <div class="log-block-header prompt-header">发送给 Claude 的提示词</div>
+            <pre class="log-output prompt-output">{{ log.prompt }}</pre>
+          </div>
           <div v-if="log.stdout" class="log-block">
             <div class="log-block-header stdout-header">stdout</div>
             <pre class="log-output">{{ log.stdout }}</pre>
@@ -198,19 +202,32 @@ function formatTime(iso) {
   background: #fce8e6;
 }
 
+.prompt-header {
+  color: #2980b9;
+  background: #d6eaf8;
+}
+
 .log-output {
   margin: 0;
-  padding: 10px 12px;
+  padding: 12px 14px;
   background: #1e1e2e;
   color: #cdd6f4;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
   border-radius: 0 0 6px 6px;
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-all;
   font-family: 'Consolas', 'Courier New', monospace;
+}
+
+.prompt-output {
+  max-height: 400px;
+  background: #f8f9fa;
+  color: #2c3e50;
+  border: 1px solid #d6eaf8;
+  border-top: none;
 }
 
 .stderr {

@@ -22,7 +22,7 @@ async def get_card_logs(card_id: str, db: AsyncSession = Depends(get_db)):
         LogResponse(
             id=l.id, card_id=l.card_id, swimlane_id=l.swimlane_id,
             attempt=l.attempt, process_id=l.process_id,
-            stdout=l.stdout, stderr=l.stderr, exit_code=l.exit_code,
+            prompt=l.prompt, stdout=l.stdout, stderr=l.stderr, exit_code=l.exit_code,
             session_id=l.session_id, started_at=l.started_at,
             finished_at=l.finished_at, created_at=l.created_at,
         ) for l in logs

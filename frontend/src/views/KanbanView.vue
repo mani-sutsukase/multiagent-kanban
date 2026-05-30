@@ -24,6 +24,7 @@
         :swimlane="swimlane"
         :kanban-id="route.params.id"
         @card-click="showCardDetail"
+        @card-moved="onCardMoved"
       />
     </div>
 
@@ -59,6 +60,7 @@
     <CardDetailModal
       v-if="selectedCard"
       :card="selectedCard"
+      :swimlanes="swimlanes"
       @close="selectedCard = null"
       @status-changed="onCardStatusChanged"
     />
@@ -76,6 +78,7 @@ import SwimlaneConfig from '../components/SwimlaneConfig.vue'
 import SwimlaneOrderEditor from '../components/SwimlaneOrderEditor.vue'
 import KanbanSettings from '../components/KanbanSettings.vue'
 import CardDetailModal from '../components/CardDetailModal.vue'
+import { cardApi } from '../api/card'
 
 const route = useRoute()
 const router = useRouter()
@@ -104,14 +107,24 @@ function onDeleted() {
   router.push('/')
 }
 
-function showCardDetail(card) {
-  selectedCard.value = card
+async function showCardDetail(card) {
+  try {
+    const res = await cardApi.get(card.id)
+    selectedCard.value = res.data
+  } catch {
+    selectedCard.value = card
+  }
 }
 
 function onCardStatusChanged({ id, status }) {
   // 同步更新 store 中的卡片状态
   cardStore.updateCardStatus(id, status)
   // 刷新当前看板的卡片列表
+  cardStore.fetchByKanban(route.params.id)
+}
+
+function onCardMoved() {
+  // 拖拽移动卡片后刷新数据
   cardStore.fetchByKanban(route.params.id)
 }
 
