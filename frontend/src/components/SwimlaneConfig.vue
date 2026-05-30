@@ -48,6 +48,7 @@
               <label>额外可访问路径</label>
               <div v-for="(ap, apIdx) in swimlane.allowed_paths_arr" :key="apIdx" class="extra-path-row">
                 <input v-model="ap.path" class="extra-path-input" placeholder="D:\other\path" />
+                <button class="btn-sm btn-browse" type="button" @click="openExtraPathBrowser(ap)">选择</button>
                 <select v-model="ap.permission" class="permission-select">
                   <option value="read_write">读写</option>
                   <option value="read_only">只读</option>
@@ -180,9 +181,21 @@ function openBrowser(swimlane) {
   loadDir()
 }
 
+function openExtraPathBrowser(entry) {
+  browserTarget.value = entry
+  browserPath.value = entry.path || ''
+  loadDir()
+}
+
 function confirmDir() {
   if (browserTarget.value && browserPath.value) {
-    browserTarget.value.local_path = browserPath.value
+    if ('local_path' in browserTarget.value) {
+      // 泳道对象：设置 local_path
+      browserTarget.value.local_path = browserPath.value
+    } else {
+      // 额外路径条目：设置 path
+      browserTarget.value.path = browserPath.value
+    }
   }
   browserTarget.value = null
 }

@@ -42,7 +42,10 @@
           <div v-if="showPathConfig" class="collapse-body">
             <div class="form-group">
               <label>工作目录</label>
-              <input v-model="localPath" placeholder="例如 D:\my-project" />
+              <div class="path-row">
+                <input v-model="localPath" placeholder="例如 D:\my-project" />
+                <button class="btn-sm btn-browse" type="button" @click="openWorkDirBrowser">选择</button>
+              </div>
             </div>
             <div class="form-group">
               <label>目录权限</label>
@@ -55,6 +58,7 @@
               <label>额外可访问路径</label>
               <div v-for="(ap, idx) in allowedPathsArr" :key="idx" class="extra-path-row">
                 <input v-model="ap.path" class="extra-path-input" placeholder="D:\other\path" />
+                <button class="btn-sm btn-browse" type="button" @click="openExtraPathBrowser(ap)">选择</button>
                 <select v-model="ap.permission" class="perm-select">
                   <option value="read_write">读写</option>
                   <option value="read_only">只读</option>
@@ -72,12 +76,47 @@
       </form>
     </div>
   </div>
+
+  <!-- 目录选择器弹窗 -->
+  <div v-if="browserTarget" class="dialog-overlay browser-overlay" @click.self="browserTarget = null">
+    <div class="dialog dialog-browser">
+      <h2>选择目录</h2>
+      <div class="browser-current-path">
+        <input v-model="browserPath" class="browser-path-input" placeholder="输入路径后按 Enter" @keyup.enter="loadDir" />
+        <button class="btn-sm btn-browse" @click="loadDir">转到</button>
+      </div>
+      <div v-if="browserError" class="browser-error">{{ browserError }}</div>
+      <div class="browser-list">
+        <div v-if="browserParent" class="browser-item browser-item-up" @click="browserPath = browserParent; loadDir()">
+          <span class="browser-icon">📂</span>
+          <span>.. (上级目录)</span>
+        </div>
+        <div
+          v-for="entry in browserEntries"
+          :key="entry.path"
+          class="browser-item"
+          :class="{ current: browserPath === entry.path }"
+          @click="browserPath = entry.path; loadDir()"
+        >
+          <span class="browser-icon">📁</span>
+          <span class="browser-name">{{ entry.name }}</span>
+          <span class="browser-path-text">{{ entry.path }}</span>
+        </div>
+        <div v-if="browserEntries.length === 0 && !browserError" class="browser-empty">此目录下没有子目录</div>
+      </div>
+      <div class="browser-actions">
+        <button class="btn btn-cancel" @click="browserTarget = null">取消</button>
+        <button class="btn btn-primary" :disabled="!browserPath" @click="confirmDir">选择此文件夹</button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
 import { useCardStore } from '../stores/card'
 import { useSettingStore } from '../stores/setting'
+import client from '../api/client'
 
 const props = defineProps({
   kanbanId: String,
@@ -129,6 +168,52 @@ async function submit() {
     allowed_paths: JSON.stringify(allowedPathsArr.value),
   })
   emit('created')
+}
+
+// 目录浏览器状态
+const browserTarget = ref(null)
+const browserPath = ref('')
+const browserParent = ref(null)
+const browserEntries = ref([])
+const browserError = ref('')
+
+async function loadDir() {
+  browserError.value = ''
+  browserEntries.value = []
+  try {
+    const res = await client.get('/browse-directory', { params: { path: browserPath.value } })
+    const data = res.data
+    browserPath.value = data.current || ''
+    browserParent.value = data.parent || null
+    browserEntries.value = data.entries || []
+    if (data.error) {
+      browserError.value = data.error
+    }
+  } catch (e) {
+    browserError.value = '无法读取目录'
+  }
+}
+
+function openWorkDirBrowser() {
+  browserTarget.value = { type: 'localPath' }
+  browserPath.value = localPath.value || ''
+  loadDir()
+}
+
+function openExtraPathBrowser(entry) {
+  browserTarget.value = { type: 'extraPath', entry }
+  browserPath.value = entry.path || ''
+  loadDir()
+}
+
+function confirmDir() {
+  if (!browserTarget.value || !browserPath.value) return
+  if (browserTarget.value.type === 'localPath') {
+    localPath.value = browserPath.value
+  } else if (browserTarget.value.type === 'extraPath' && browserTarget.value.entry) {
+    browserTarget.value.entry.path = browserPath.value
+  }
+  browserTarget.value = null
 }
 </script>
 
@@ -216,4 +301,26 @@ h2 { margin-bottom: 20px; font-size: 18px; color: #2c3e50; }
 .btn-primary { background: #3498db; color: #fff; }
 .btn-primary:disabled { background: #bdc3c7; cursor: not-allowed; }
 .btn-cancel { background: #ecf0f1; color: #555; }
+
+.path-row { display: flex; gap: 6px; }
+.path-row input { flex: 1; }
+
+/* 目录浏览器 */
+.browser-overlay { z-index: 200; }
+.dialog-browser { width: 520px; max-height: 70vh; display: flex; flex-direction: column; }
+.browser-current-path { display: flex; gap: 6px; margin-bottom: 12px; }
+.browser-path-input { flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; outline: none; font-family: 'Consolas', 'Courier New', monospace; }
+.browser-path-input:focus { border-color: #3498db; }
+.browser-error { color: #e74c3c; font-size: 12px; margin-bottom: 8px; }
+.browser-list { flex: 1; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; min-height: 200px; max-height: 350px; background: #fafafa; }
+.browser-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee; transition: background 0.1s; background: #fff; }
+.browser-item:last-child { border-bottom: none; }
+.browser-item:hover { background: #eef6fb; }
+.browser-item.current { background: #e3f0fa; }
+.browser-item-up { color: #7f8c8d; }
+.browser-icon { font-size: 14px; flex-shrink: 0; }
+.browser-name { font-size: 13px; color: #2c3e50; }
+.browser-path-text { font-size: 11px; color: #95a5a6; margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.browser-empty { padding: 24px; text-align: center; color: #95a5a6; font-size: 13px; }
+.browser-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 </style>
