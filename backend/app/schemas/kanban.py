@@ -22,6 +22,8 @@ class SwimlaneBrief(BaseModel):
     flow_mode: str
     local_path: Optional[str] = None
     wait_for_reply: str = "0"
+    local_path_permission: str = "read_write"
+    allowed_paths: str = "[]"
     card_count: int = 0
 
     class Config:
@@ -48,6 +50,8 @@ class SwimlaneCreate(BaseModel):
     flow_mode: str = "auto"
     local_path: Optional[str] = None
     wait_for_reply: str = "0"
+    local_path_permission: str = "read_write"
+    allowed_paths: str = "[]"
 
 
 class SwimlaneUpdate(BaseModel):
@@ -58,6 +62,8 @@ class SwimlaneUpdate(BaseModel):
     flow_mode: Optional[str] = None
     local_path: Optional[str] = None
     wait_for_reply: Optional[str] = None
+    local_path_permission: Optional[str] = None
+    allowed_paths: Optional[str] = None
 
 
 class SwimlaneResponse(BaseModel):
@@ -71,6 +77,8 @@ class SwimlaneResponse(BaseModel):
     flow_mode: str
     local_path: Optional[str] = None
     wait_for_reply: str = "0"
+    local_path_permission: str = "read_write"
+    allowed_paths: str = "[]"
     created_at: str
     updated_at: str
 

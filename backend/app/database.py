@@ -30,6 +30,12 @@ async def init_db():
         await conn.run_sync(_add_card_result_column)
         # 迁移：为 cards 表添加 last_prompt, last_output, user_reply 列（如果不存在）
         await conn.run_sync(_add_card_missing_columns)
+        # 迁移：为 logs 表添加 prompt 列（如果不存在）
+        await conn.run_sync(_add_log_prompt_column)
+        # 迁移：为 cards 表添加 local_path 等字段
+        await conn.run_sync(_add_card_path_fields)
+        # 迁移：为 swimlanes 表添加 local_path_permission 等字段
+        await conn.run_sync(_add_swimlane_path_fields)
 
 
 def _add_swimlane_local_path(conn):
@@ -81,5 +87,62 @@ def _add_swimlane_wait_for_reply(conn):
         conn.execute(
             __import__("sqlalchemy").text(
                 "ALTER TABLE swimlanes ADD COLUMN wait_for_reply VARCHAR NOT NULL DEFAULT '0'"
+            )
+        )
+
+
+def _add_log_prompt_column(conn):
+    """为已有数据库添加 prompt 列（幂等）"""
+    from sqlalchemy import inspect
+    inspector = inspect(conn)
+    columns = [c["name"] for c in inspector.get_columns("logs")]
+    if "prompt" not in columns:
+        conn.execute(
+            __import__("sqlalchemy").text(
+                "ALTER TABLE logs ADD COLUMN prompt TEXT"
+            )
+        )
+
+
+def _add_card_path_fields(conn):
+    """为已有数据库添加 local_path, local_path_permission, allowed_paths 列（幂等）"""
+    from sqlalchemy import inspect
+    inspector = inspect(conn)
+    columns = [c["name"] for c in inspector.get_columns("cards")]
+    if "local_path" not in columns:
+        conn.execute(
+            __import__("sqlalchemy").text(
+                "ALTER TABLE cards ADD COLUMN local_path VARCHAR"
+            )
+        )
+    if "local_path_permission" not in columns:
+        conn.execute(
+            __import__("sqlalchemy").text(
+                "ALTER TABLE cards ADD COLUMN local_path_permission VARCHAR NOT NULL DEFAULT 'read_write'"
+            )
+        )
+    if "allowed_paths" not in columns:
+        conn.execute(
+            __import__("sqlalchemy").text(
+                "ALTER TABLE cards ADD COLUMN allowed_paths TEXT NOT NULL DEFAULT '[]'"
+            )
+        )
+
+
+def _add_swimlane_path_fields(conn):
+    """为已有数据库添加 local_path_permission, allowed_paths 列（幂等）"""
+    from sqlalchemy import inspect
+    inspector = inspect(conn)
+    columns = [c["name"] for c in inspector.get_columns("swimlanes")]
+    if "local_path_permission" not in columns:
+        conn.execute(
+            __import__("sqlalchemy").text(
+                "ALTER TABLE swimlanes ADD COLUMN local_path_permission VARCHAR NOT NULL DEFAULT 'read_write'"
+            )
+        )
+    if "allowed_paths" not in columns:
+        conn.execute(
+            __import__("sqlalchemy").text(
+                "ALTER TABLE swimlanes ADD COLUMN allowed_paths TEXT NOT NULL DEFAULT '[]'"
             )
         )

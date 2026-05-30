@@ -7,6 +7,9 @@ class CardCreate(BaseModel):
     content: str = ""
     model: str = "claude-sonnet-4-20250514"
     target_swimlane_id: Optional[str] = None
+    local_path: Optional[str] = None
+    local_path_permission: str = "read_write"
+    allowed_paths: str = "[]"
 
 
 class CardUpdate(BaseModel):
@@ -30,6 +33,9 @@ class CardResponse(BaseModel):
     last_prompt: Optional[str] = None
     last_output: Optional[str] = None
     user_reply: Optional[str] = None
+    local_path: Optional[str] = None
+    local_path_permission: str = "read_write"
+    allowed_paths: str = "[]"
     created_at: str
     updated_at: str
 
