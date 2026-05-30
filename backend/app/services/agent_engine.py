@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import re
 import subprocess
@@ -63,16 +64,39 @@ class AgentEngine:
             return False, f"检查 claude 可用性时出错: {type(e).__name__}: {e}"
 
     def _build_claude_args(self, card: Card, swimlane: Swimlane) -> tuple[list[str], str]:
-        """构建 claude 命令行参数，返回 (args, full_prompt)"""
+        """构建 claude 命令行参数，返回 (args, full_prompt)
+        注意：提示词通过 stdin 管道传递（避免 Windows cmd.exe 编码破坏中文），
+        因此 args 中不包含 -p 参数。"""
         args = [settings.claude_path]
         if card.model:
             args.extend(["--model", card.model])
-        prompt = swimlane.prompt
+
+        parts = []
+
+        # 1. 卡片信息（始终包含）
+        card_info = f"【任务信息】\n卡片标题：{card.title}"
+        if card.content:
+            card_info += f"\n卡片内容：{card.content}"
+        parts.append(card_info)
+
+        # 2. 泳道指令
+        if swimlane.prompt and swimlane.prompt.strip():
+            parts.append(f"\n\n【任务指令】\n{swimlane.prompt}")
+
+        # 3. 审核意见（仅当存在时）
         if card.rejection_note:
-            prompt += f"\n\n【上次审核意见】\n{card.rejection_note}\n\n请根据审核意见改进。"
+            parts.append(
+                f"\n\n【上次审核意见】\n{card.rejection_note}\n\n请根据审核意见改进。"
+            )
+
+        # 4. 用户回复（仅当存在时）
         if card.user_reply:
-            prompt += f"\n\n【用户回复】\n{card.user_reply}\n\n请根据用户的回复继续工作。"
-        args.extend(["-p", prompt])
+            parts.append(
+                f"\n\n【用户回复】\n{card.user_reply}\n\n请根据用户的回复继续工作。"
+            )
+
+        prompt = "".join(parts)
+        # 提示词通过 stdin 传递，不在命令行参数中包含 -p（避免编码问题）
         if swimlane.skill:
             args.extend(["--skill", swimlane.skill])
         if card.session_id and card.status == "rejected":
@@ -239,6 +263,47 @@ class AgentEngine:
                             })
                 return
             args, full_prompt = self._build_claude_args(card, swimlane)
+
+            # ---- 路径权限合并 ----
+            all_allowed_paths = []
+
+            # 卡片路径
+            card_local = getattr(card, 'local_path', None) or ''
+            if card_local.strip():
+                perm = getattr(card, 'local_path_permission', 'read_write') or 'read_write'
+                all_allowed_paths.append({"path": card_local.strip(), "permission": perm})
+            card_extra = getattr(card, 'allowed_paths', None) or '[]'
+            if card_extra.strip():
+                try:
+                    extra = json.loads(card_extra)
+                    if isinstance(extra, list):
+                        all_allowed_paths.extend(extra)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            # 泳道路径
+            swim_local = swimlane.local_path or ''
+            if swim_local.strip():
+                sw_perm = getattr(swimlane, 'local_path_permission', 'read_write') or 'read_write'
+                all_allowed_paths.append({"path": swim_local.strip(), "permission": sw_perm})
+            sw_extra = getattr(swimlane, 'allowed_paths', None) or '[]'
+            if sw_extra.strip():
+                try:
+                    extra = json.loads(sw_extra)
+                    if isinstance(extra, list):
+                        all_allowed_paths.extend(extra)
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            # 去重（按路径去重，保留最后一个的权限设置）
+            seen = {}
+            for item in all_allowed_paths:
+                seen[item["path"]] = item["permission"]
+            unique_paths = [{"path": p, "permission": perm} for p, perm in seen.items()]
+
+            # 设置 cwd：卡片 local_path > 泳道 local_path > None
+            cwd = card_local.strip() or swim_local.strip() or None
+
             cmd = subprocess.list2cmdline(args)
 
             # 保存提示词到卡片
@@ -251,18 +316,34 @@ class AgentEngine:
             proc_env = os.environ.copy()
             if settings.claude_git_bash_path:
                 proc_env["CLAUDE_CODE_GIT_BASH_PATH"] = settings.claude_git_bash_path
-            # 如果泳道配置了本地路径，则在该目录下启动 Claude（使用该目录的 claude 配置）
-            cwd = swimlane.local_path if swimlane.local_path else None
+            # 构建 CLAUDE_CODE_ALLOWED_PATHS 环境变量
+            if unique_paths:
+                path_list = [p["path"] for p in unique_paths]
+                proc_env["CLAUDE_CODE_ALLOWED_PATHS"] = ";".join(path_list)
+            # 为 read_only 路径追加提示词说明
+            read_only_paths = [p["path"] for p in unique_paths if p["permission"] == "read_only"]
+            if read_only_paths:
+                read_only_note = "\n\n【文件访问说明】\n以下路径仅允许读取，不允许修改任何文件：\n"
+                for rp in read_only_paths:
+                    read_only_note += f"- {rp}\n"
+                full_prompt += read_only_note
+            # ---- 路径权限合并结束 ----
             # 使用 to_thread + Popen 避免 Python 3.14 Windows 异步子进程问题
+            # 提示词通过 stdin 管道传递为 UTF-8 字节，避免 Windows cmd.exe 编码破坏中文
             proc = await asyncio.to_thread(
                 subprocess.Popen,
                 cmd,
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=proc_env,
                 cwd=cwd,
                 shell=True,
             )
+            # 将提示词以 UTF-8 写入 stdin，然后关闭管道（Claude CLI 会读取 stdin 作为提示词）
+            stdin_bytes = full_prompt.encode("utf-8")
+            await asyncio.to_thread(proc.stdin.write, stdin_bytes)
+            await asyncio.to_thread(proc.stdin.close)
             self._processes[card.id] = proc
             async with async_session_factory() as db:
                 log_service = LogService(db)
@@ -272,6 +353,7 @@ class AgentEngine:
                 log_entry = await log_service.create_log(
                     card_id=card.id, swimlane_id=swimlane.id,
                     attempt=attempt, process_id=proc.pid,
+                    prompt=full_prompt,
                 )
             async with async_session_factory() as db:
                 log_service = LogService(db)
