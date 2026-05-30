@@ -64,7 +64,9 @@ class SwimlaneService:
                            skill: str = None, tools: str = "[]",
                            flow_mode: str = "auto",
                            local_path: str = None,
-                           wait_for_reply: str = "0") -> Swimlane:
+                           wait_for_reply: str = "0",
+                           local_path_permission: str = "read_write",
+                           allowed_paths: str = "[]") -> Swimlane:
         # 获取当前最大 sort_order
         result = await self.db.execute(
             select(func.max(Swimlane.sort_order)).where(Swimlane.kanban_id == kanban_id)
@@ -80,6 +82,8 @@ class SwimlaneService:
             tools=tools,
             flow_mode=flow_mode,
             local_path=local_path,
+            local_path_permission=local_path_permission,
+            allowed_paths=allowed_paths,
             wait_for_reply=wait_for_reply,
         )
         self.db.add(swimlane)

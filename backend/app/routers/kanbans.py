@@ -104,11 +104,13 @@ async def add_swimlane(kanban_id: str, data: SwimlaneCreate,
     s = await service.add_swimlane(
         kanban_id, data.name, data.prompt, data.skill, data.tools, data.flow_mode,
         local_path=data.local_path, wait_for_reply=data.wait_for_reply,
+        local_path_permission=data.local_path_permission, allowed_paths=data.allowed_paths,
     )
     return SwimlaneResponse(
         id=s.id, kanban_id=s.kanban_id, name=s.name, sort_order=s.sort_order,
         prompt=s.prompt, skill=s.skill, tools=s.tools, flow_mode=s.flow_mode,
         local_path=s.local_path, wait_for_reply=s.wait_for_reply,
+        local_path_permission=s.local_path_permission, allowed_paths=s.allowed_paths,
         created_at=s.created_at, updated_at=s.updated_at,
     )
 
@@ -117,17 +119,15 @@ async def add_swimlane(kanban_id: str, data: SwimlaneCreate,
 async def update_swimlane(swimlane_id: str, data: SwimlaneUpdate,
                           db: AsyncSession = Depends(get_db)):
     service = SwimlaneService(db)
-    s = await service.update(
-        swimlane_id, name=data.name, prompt=data.prompt,
-        skill=data.skill, tools=data.tools, flow_mode=data.flow_mode,
-        local_path=data.local_path, wait_for_reply=data.wait_for_reply,
-    )
+    update_data = data.model_dump(exclude_none=True)
+    s = await service.update(swimlane_id, **update_data)
     if not s:
         raise HTTPException(status_code=404, detail="泳道不存在")
     return SwimlaneResponse(
         id=s.id, kanban_id=s.kanban_id, name=s.name, sort_order=s.sort_order,
         prompt=s.prompt, skill=s.skill, tools=s.tools, flow_mode=s.flow_mode,
         local_path=s.local_path, wait_for_reply=s.wait_for_reply,
+        local_path_permission=s.local_path_permission, allowed_paths=s.allowed_paths,
         created_at=s.created_at, updated_at=s.updated_at,
     )
 

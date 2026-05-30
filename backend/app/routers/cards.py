@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -7,6 +8,10 @@ from app.services.card_engine import CardEngine
 from app.services.kanban_service import KanbanService
 from app.services.agent_engine import agent_engine
 from app.schemas.card import CardCreate, CardUpdate, CardResponse, ReplyRequest
+
+
+class MoveCardRequest(BaseModel):
+    target_swimlane_id: str
 
 router = APIRouter(prefix="/api")
 
@@ -18,6 +23,8 @@ def _card_to_response(card) -> CardResponse:
         status=card.status, session_id=card.session_id, rejection_note=card.rejection_note,
         result=card.result, last_prompt=card.last_prompt, last_output=card.last_output,
         user_reply=card.user_reply,
+        local_path=card.local_path, local_path_permission=card.local_path_permission,
+        allowed_paths=card.allowed_paths,
         created_at=card.created_at, updated_at=card.updated_at,
     )
 
@@ -127,6 +134,63 @@ async def advance_card(card_id: str, db: AsyncSession = Depends(get_db)):
     await card_engine.advance_to_next_swimlane(card)
 
     # 懒导入避免循环依赖
+    from app.main import ws_manager
+    await ws_manager.broadcast({
+        "type": "card_status_changed",
+        "card_id": card.id,
+        "status": card.status,
+        "swimlane_id": card.current_swimlane_id,
+    })
+
+    return _card_to_response(card)
+
+
+@router.post("/cards/{card_id}/clean", response_model=CardResponse)
+async def clean_card(card_id: str, db: AsyncSession = Depends(get_db)):
+    """清理卡片的所有执行记录：清空执行数据、删除日志、重置到第一泳道"""
+    service = CardService(db)
+    card = await service.get_card(card_id)
+    if not card:
+        raise HTTPException(status_code=404, detail="卡片不存在")
+
+    # 如果卡片正在运行，先终止
+    if card.status == "running":
+        await agent_engine.terminate_card(card_id)
+
+    card = await service.clean_card(card_id)
+
+    from app.main import ws_manager
+    await ws_manager.broadcast({
+        "type": "card_status_changed",
+        "card_id": card.id,
+        "status": card.status,
+        "swimlane_id": card.current_swimlane_id,
+    })
+
+    return _card_to_response(card)
+
+
+@router.post("/cards/{card_id}/move", response_model=CardResponse)
+async def move_card(card_id: str, data: MoveCardRequest,
+                    db: AsyncSession = Depends(get_db)):
+    """拖拽移动卡片到目标泳道"""
+    service = CardService(db)
+    card = await service.get_card(card_id)
+    if not card:
+        raise HTTPException(status_code=404, detail="卡片不存在")
+
+    # 如果卡片正在运行，先终止
+    if card.status == "running":
+        await agent_engine.terminate_card(card_id)
+
+    card.current_swimlane_id = data.target_swimlane_id
+    card.status = "pending"
+    card.last_prompt = None
+    card.last_output = None
+    card.result = None
+    await db.commit()
+    await db.refresh(card)
+
     from app.main import ws_manager
     await ws_manager.broadcast({
         "type": "card_status_changed",

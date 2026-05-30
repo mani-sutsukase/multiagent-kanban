@@ -1,7 +1,8 @@
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.card import Card
+from app.models.log import Log
 from app.services.kanban_service import SwimlaneService
 
 
@@ -11,7 +12,10 @@ class CardService:
 
     async def create_card(self, kanban_id: str, title: str, content: str = "",
                           model: str = "claude-sonnet-4-20250514",
-                          target_swimlane_id: str = None) -> Card:
+                          target_swimlane_id: str = None,
+                          local_path: str = None,
+                          local_path_permission: str = "read_write",
+                          allowed_paths: str = "[]") -> Card:
         if not target_swimlane_id:
             swimlane_service = SwimlaneService(self.db)
             first = await swimlane_service.get_first_swimlane(kanban_id)
@@ -25,6 +29,9 @@ class CardService:
             content=content,
             model=model,
             current_swimlane_id=target_swimlane_id,
+            local_path=local_path,
+            local_path_permission=local_path_permission,
+            allowed_paths=allowed_paths,
             status="pending",
         )
         self.db.add(card)
@@ -75,3 +82,30 @@ class CardService:
             )
         )
         return result.scalar() or 0
+
+    async def clean_card(self, card_id: str) -> Card | None:
+        """清理卡片的所有执行记录：清空执行数据、删除日志、重置到第一泳道"""
+        card = await self.get_card(card_id)
+        if not card:
+            return None
+
+        # 清空执行数据
+        card.result = None
+        card.last_prompt = None
+        card.last_output = None
+        card.session_id = None
+        card.rejection_note = None
+        card.user_reply = None
+
+        # 删除所有日志
+        await self.db.execute(delete(Log).where(Log.card_id == card_id))
+
+        # 重置到第一泳道
+        swimlane_service = SwimlaneService(self.db)
+        first = await swimlane_service.get_first_swimlane(card.kanban_id)
+        card.current_swimlane_id = first.id if first else None
+        card.status = "pending"
+
+        await self.db.commit()
+        await self.db.refresh(card)
+        return card
