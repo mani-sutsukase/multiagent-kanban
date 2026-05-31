@@ -114,8 +114,106 @@ _card_picker_loop (可配置轮询间隔，默认 5s)
 ### 卡片状态
 
 ```
-pending → running → waiting_approval / completed / blocked → (流转或结束)
+pending → running → waiting_approval / waiting_for_reply / completed / errored / blocked → (流转或结束)
 ```
+
+## Claude CLI 调用机制
+
+### 调用时机
+
+| 时机 | 触发者 | 说明 |
+|------|--------|------|
+| 卡片拾取轮询 | `_card_picker_loop` (后台 Task) | 每 N 秒（默认 5s）扫描所有 `pending` 卡片，逐个启动 Agent 执行 |
+| 审批通过 | 用户在前端点击"审批" | 卡片重新入队为 `pending`，下一轮拾取时执行下一泳道 |
+| 授权批准 | 用户在前端点击"授权" | 卡片重新入队为 `pending`，保留 `session_id` 以 `--resume` 恢复 Claude 会话 |
+| 授权驳回 | 用户在前端填写驳回意见 | 卡片重新入队为 `pending`，附带 `rejection_note` 提示 Claude 改进 |
+| 用户回复 | 用户在 `waiting_for_reply` 状态下填写回复 | 卡片重新入队为 `pending`，保留 `session_id` 以 `--resume` 恢复对话 |
+| 定时任务 | APScheduler 触发器 | 按 cron 表达式生成卡片并写入数据库，等下一轮拾取 |
+
+### 调用方式
+
+```
+subprocess.Popen(cmd, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=..., cwd=..., shell=True)
+```
+
+- **提示词传递** — 完整提示词通过 **stdin 管道**以 UTF-8 编码传入，避免 Windows cmd.exe 编码破坏非 ASCII 字符
+- **工作目录 (cwd)** — 优先使用卡片的 `local_path`，其次使用泳道的 `local_path`，均无则使用默认目录
+- **并发控制** — `asyncio.Semaphore` 限制最大并行进程数（默认 3），超出队列等待
+- **环境变量** — 注入 `CLAUDE_CODE_GIT_BASH_PATH` 和 `CLAUDE_CODE_ALLOWED_PATHS` 供 Claude 参考路径权限
+- **目录联接** — 对 cwd 外部的 `read_write` 路径自动创建 Windows 目录联接点 (junction)，使 Claude 可通过 cwd 子目录访问，执行后自动清理
+
+### Claude CLI 参数
+
+| 参数 | 条件 | 说明 |
+|------|------|------|
+| `--model <name>` | 卡片指定了模型 | 指定 Claude 模型（如 `claude-sonnet-4-20250514`） |
+| `--skill <name>` | 泳道配置了 skill | 加载 Claude 内置 skill |
+| `--resume <session_id>` | 卡片有 `session_id` 且 `user_reply` 不为空 | 恢复之前的 Claude 会话，保留上下文 |
+| `--dangerously-skip-permissions` | 卡片设置启用 | 跳过 Claude 的文件路径权限检查 |
+
+### 提示词构成
+
+发送给 Claude 的完整提示词按以下顺序组装：
+
+```
+┌──────────────────────────────────────────┐
+│ 1. 任务信息                               │
+│    卡片标题 + 卡片内容                      │
+├──────────────────────────────────────────┤
+│ 2. 任务指令 (泳道 prompt)                  │
+│    泳道配置的执行指令                       │
+├──────────────────────────────────────────┤
+│ 3. 回复标记指令                            │
+│    Claude 可通过尾部 JSON 标记声明需要回复   │
+├──────────────────────────────────────────┤
+│ 4. 禁用文件操作工具指令                      │
+│    避免 BashTool pre-flight 超时问题        │
+├──────────────────────────────────────────┤
+│ 5. 上次审核意见 (仅存在时)                  │
+│    驳回时用户填写的改进意见                  │
+├──────────────────────────────────────────┤
+│ 6. 用户回复 (仅存在时)                      │
+│    用户对 Claude 提问的回复内容              │
+├──────────────────────────────────────────┤
+│ 7. 文件访问说明                             │
+│    路径权限清单 (read_write / read_only)    │
+├──────────────────────────────────────────┤
+│ 8. 目录文件列表                             │
+│    read_write 路径下的现有文件结构            │
+└──────────────────────────────────────────┘
+```
+
+### 执行结果处理
+
+当 Claude 子进程退出后，`_on_process_exit` 根据退出码和输出内容进行状态判定：
+
+```
+                ┌─ JSON 标记需要回复 ──► waiting_for_reply
+                │                        (保留 session_id 供 --resume)
+                │
+exit_code=0 ────┼─ 输出含执行失败模式 ──► errored
+                │                        (权限错误、文件访问失败等)
+                │
+                ├─ 正常执行成功 ────────► handle_swimlane_completion()
+                │                          ├─ auto ──────► pending (下一泳道) / completed
+                │                          └─ pre_approval ► waiting_approval
+                │
+exit_code≠0 ────┴─ 进程异常退出 ───────► errored
+```
+
+**额外处理：**
+- **文件提取** — 成功执行后，从 Claude 输出中解析标记的文件区块 (`<file>filename.ext` + 内容)，自动写入到允许的读写目录
+- **Session 保存** — 从 stdout 中提取 `Session ID` 并保存到卡片，供后续 `--resume` 使用
+- **日志清理** — 清理 stderr 中的 ANSI 控制码和 spinner 动画噪声，只保留有意义的错误/状态信息
+- **目录联接清理** — 执行结束后移除本次创建的临时目录联接点
+
+### 何时不调用 Claude
+
+| 条件 | 行为 |
+|------|------|
+| 泳道 prompt 为空 | 直接跳过该泳道，推进到下一泳道或标记完成 |
+| Claude 不可用 (`claude --version` 失败) | 卡片标记为 `errored`，记录错误信息 |
+| 并发数已满 | 卡片保持 `pending`，等待信号量释放 |
 
 ## 配置
 
