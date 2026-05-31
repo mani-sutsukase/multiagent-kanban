@@ -95,6 +95,7 @@ class ScheduleEngine:
                     "type": "schedule_triggered",
                     "schedule_id": schedule_id,
                     "card_id": card_id,
+                    "kanban_id": schedule.target_kanban_id,
                 })
         else:
             await self._log_execution(schedule_id, None, "failed",

@@ -168,6 +168,12 @@ onMounted(async () => {
     approvalStore.fetchPending()
   })
 
+  on('schedule_triggered', (msg) => {
+    if (msg.kanban_id) {
+      cardStore.fetchByKanban(msg.kanban_id)
+    }
+  })
+
   // 倒计时每秒更新
   countdownTimer = setInterval(updateCountdown, 1000)
   // 每 60 秒刷新 store
@@ -185,6 +191,7 @@ onUnmounted(() => {
   off('card_status_changed')
   off('card_needs_approval')
   off('card_completed')
+  off('schedule_triggered')
   if (countdownTimer) clearInterval(countdownTimer)
   if (refreshTimer) clearInterval(refreshTimer)
 })

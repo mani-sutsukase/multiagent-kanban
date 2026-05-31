@@ -103,8 +103,8 @@
                 <span class="reply-section-icon">💬</span>
                 <span>Claude 需要你回复</span>
               </div>
-              <div v-if="card.user_reply_question" class="reply-question">
-                <p class="reply-question-text">{{ card.user_reply_question }}</p>
+              <div class="reply-question">
+                <p class="reply-question-text">{{ card.user_reply_question || card.last_output || '(无提问内容)' }}</p>
               </div>
             </div>
             <!-- 下半部分：用户回复输入 -->

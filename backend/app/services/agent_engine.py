@@ -18,8 +18,14 @@ from app.models.card import Card
 from app.models.kanban import Swimlane
 from app.services.log_service import LogService
 from app.services.card_engine import CardEngine
+from app.services.file_writer import (
+    NO_FILE_TOOLS_INSTRUCTION,
+    scan_directories,
+    extract_file_sections,
+    write_files,
+)
 from app.websocket_manager import WebSocketManager
-from app.services.kanban_service import SwimlaneService
+
 
 # Claude 输出中表示执行失败的模式（权限问题、文件访问错误等）
 _EXECUTION_FAILURE_PATTERNS = [
@@ -158,6 +164,7 @@ class AgentEngine:
         self._ws_manager: WebSocketManager | None = None
         self._claude_checked = False
         self._junctions: dict[str, list[str]] = {}  # card_id -> [junction_paths]
+        self._file_dirs: dict[str, list[str]] = {}  # card_id -> [rw_paths]
 
     def set_ws_manager(self, ws_manager: WebSocketManager):
         self._ws_manager = ws_manager
@@ -273,6 +280,8 @@ class AgentEngine:
             parts.append(f"\n\n【任务指令】\n{swimlane.prompt}")
         # 2b. 回复标记指令（Claude 可通过 JSON 显式声明需要用户回复）
         parts.append(_REPLY_MARKER_INSTRUCTION)
+        # 2c. 禁用文件操作工具指令（避免 BashTool pre-flight 超时导致文件操作不可用）
+        parts.append(NO_FILE_TOOLS_INSTRUCTION)
 
         # 3. 审核意见（仅当存在时）
         if card.rejection_note:
@@ -405,7 +414,8 @@ class AgentEngine:
                         "last_output": card.last_output,
                     })
 
-            # 3. exit_code=0 正常执行成功 → 自动流转或等待用户回复/泳道审批
+            # 3. exit_code=0 正常执行成功 → 自动流转（不因 wait_for_reply 无条件暂停）
+            #    只有 Priority 1 中 Claude 通过 JSON 标记显式请求回复才进入 waiting_for_reply
             elif exit_code == 0:
                 card.result = "任务执行成功"
                 card.user_reply = None
@@ -413,18 +423,19 @@ class AgentEngine:
                 await db.commit()
                 await db.refresh(card)
 
-                swimlane_svc = SwimlaneService(db)
-                swimlane = await swimlane_svc.get(swimlane_id)
-                wait_for_reply = swimlane.wait_for_reply == "1" if swimlane else False
+                await card_engine.handle_swimlane_completion(card)
+                broadcast_status = card.status
 
-                if wait_for_reply:
-                    card.status = "waiting_for_reply"
-                    await db.commit()
-                    await db.refresh(card)
-                    broadcast_status = "waiting_for_reply"
-                else:
-                    await card_engine.handle_swimlane_completion(card)
-                    broadcast_status = card.status
+                # 从 Claude 输出中提取文件内容并写入磁盘
+                allowed_dirs = self._file_dirs.pop(card_id, [])
+                if allowed_dirs and card.last_output:
+                    sections = extract_file_sections(card.last_output)
+                    if sections:
+                        results = write_files(sections, allowed_dirs)
+                        written = [r for r in results if r.get("status") == "ok"]
+                        if written:
+                            paths_str = "; ".join(r["path"] for r in written)
+                            print(f"[agent_engine] 已写入 {len(written)} 个文件: {paths_str}", flush=True)
 
                 if self._ws_manager:
                     await self._ws_manager.broadcast({
@@ -593,6 +604,13 @@ class AgentEngine:
                     for p in ro_paths:
                         path_note += f"- {p}\n"
                 full_prompt += path_note
+            # 扫描读写目录，将现有文件列表注入提示词（替代 Claude 的 ReadTool）
+            if rw_paths:
+                dir_context = scan_directories(rw_paths)
+                if dir_context:
+                    full_prompt += f"\n\n【目录文件列表】\n{dir_context}"
+            # 保存读写目录列表，供 _on_process_exit 中提取文件时使用
+            self._file_dirs[card.id] = rw_paths
             # ---- 路径权限合并结束 ----
 
             # 保存完整提示词（含路径信息）到卡片，便于 UI 查看实际发送给 claude 的内容
