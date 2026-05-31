@@ -33,7 +33,8 @@
       "Bash(npm install:*)",
       "Bash(openspec:*)",
       "Bash(echo:*)",
-      "Bash(C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe:*)"
+      "Bash(C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe:*)",
+      "Skill(superpowers:systematic-debugging)"
     ]
   }
 }

@@ -39,7 +39,7 @@ class Swimlane(Base):
     skill = Column(String, nullable=True)
     tools = Column(String, default="[]")  # JSON array
     flow_mode = Column(String, nullable=False, default="auto")  # auto | pre_approval | post_approval
-    wait_for_reply = Column(String, nullable=False, default="0")  # "0" 不等待回复 "1" 执行后等待用户回复
+    wait_for_reply = Column(String, nullable=False, default="1")  # "0" 不等待回复 "1" 执行后等待用户回复
     local_path = Column(String, nullable=True)  # 本地工作目录，用于启动 Claude 时的 cwd
     local_path_permission = Column(String, nullable=False, default="read_write")  # read_only / read_write
     allowed_paths = Column(Text, nullable=False, default="[]")  # JSON: [{"path":"...","permission":"read_only"|"read_write"}]

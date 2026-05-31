@@ -40,6 +40,7 @@ class CardEngine:
             card.session_id = None
             card.rejection_note = None
             card.result = None
+            card.user_reply_question = None
 
         await self.db.commit()
         await self.db.refresh(card)
@@ -64,9 +65,33 @@ class CardEngine:
         """批准后推进到下一泳道"""
         return await self.advance_to_next_swimlane(card)
 
+    async def handle_authorize_approval(self, card: Card) -> Card:
+        """用户批准授权请求后，重新执行（不推进泳道）
+
+        保留 session_id 以便 _build_claude_args 使用 --resume 恢复 Claude 会话，
+        这样 Claude 能记住之前的对话上下文和文件操作状态。
+        """
+        card.user_reply = "已授权，请继续执行"
+        card.rejection_note = None
+        card.status = "pending"
+        # 注意：不清空 session_id，让 Claude 以 --resume 恢复会话
+        await self.db.commit()
+        await self.db.refresh(card)
+        return card
+
+    async def handle_authorize_rejection(self, card: Card, rejection_note: str) -> Card:
+        """用户驳回授权请求后，重新执行（不推进泳道）"""
+        card.rejection_note = rejection_note
+        card.user_reply = None
+        card.status = "pending"
+        card.session_id = None
+        await self.db.commit()
+        await self.db.refresh(card)
+        return card
+
     async def handle_rejection(self, card: Card, rejection_note: str) -> Card:
-        """驳回后重置卡片状态为 running，保存 rejection_note，清除旧执行结果"""
-        card.status = "running"
+        """驳回后重置卡片状态为 pending（重新入队），保存 rejection_note，清除旧执行结果"""
+        card.status = "pending"
         card.rejection_note = rejection_note
         card.result = None
         await self.db.commit()

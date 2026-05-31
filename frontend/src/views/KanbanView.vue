@@ -107,13 +107,9 @@ function onDeleted() {
   router.push('/')
 }
 
-async function showCardDetail(card) {
-  try {
-    const res = await cardApi.get(card.id)
-    selectedCard.value = res.data
-  } catch {
-    selectedCard.value = card
-  }
+function showCardDetail(card) {
+  // 直接使用 store 中的响应式卡片对象，WebSocket 推送后自动更新
+  selectedCard.value = card
 }
 
 function onCardStatusChanged({ id, status }) {

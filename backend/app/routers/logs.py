@@ -31,7 +31,7 @@ async def get_card_logs(card_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/logs/cards/summary", response_model=list[CardLogSummary])
 async def get_card_log_summary(
-    status: str = Query(None, description="筛选状态: completed, blocked"),
+    status: str = Query(None, description="筛选状态: completed, blocked, errored"),
     db: AsyncSession = Depends(get_db),
 ):
     """查询已完成/异常卡片列表及其最新日志摘要"""
@@ -45,7 +45,7 @@ async def get_card_log_summary(
         .scalar_subquery()
     )
 
-    conditions = [Card.status.in_(["completed", "blocked"])]
+    conditions = [Card.status.in_(["completed", "blocked", "errored"])]
     if status:
         conditions = [Card.status == status]
 

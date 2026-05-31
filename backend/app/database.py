@@ -36,6 +36,10 @@ async def init_db():
         await conn.run_sync(_add_card_path_fields)
         # 迁移：为 swimlanes 表添加 local_path_permission 等字段
         await conn.run_sync(_add_swimlane_path_fields)
+        # 迁移：为 cards 表添加 dangerously_skip_permissions 列（如果不存在）
+        await conn.run_sync(_add_card_dangerously_skip_permissions)
+        # 迁移：为 cards 表添加 user_reply_question 列（如果不存在）
+        await conn.run_sync(_add_card_user_reply_question)
 
 
 def _add_swimlane_local_path(conn):
@@ -144,5 +148,31 @@ def _add_swimlane_path_fields(conn):
         conn.execute(
             __import__("sqlalchemy").text(
                 "ALTER TABLE swimlanes ADD COLUMN allowed_paths TEXT NOT NULL DEFAULT '[]'"
+            )
+        )
+
+
+def _add_card_dangerously_skip_permissions(conn):
+    """为已有数据库添加 dangerously_skip_permissions 列（幂等）"""
+    from sqlalchemy import inspect
+    inspector = inspect(conn)
+    columns = [c["name"] for c in inspector.get_columns("cards")]
+    if "dangerously_skip_permissions" not in columns:
+        conn.execute(
+            __import__("sqlalchemy").text(
+                "ALTER TABLE cards ADD COLUMN dangerously_skip_permissions VARCHAR NOT NULL DEFAULT '0'"
+            )
+        )
+
+
+def _add_card_user_reply_question(conn):
+    """为已有数据库添加 user_reply_question 列（幂等）"""
+    from sqlalchemy import inspect
+    inspector = inspect(conn)
+    columns = [c["name"] for c in inspector.get_columns("cards")]
+    if "user_reply_question" not in columns:
+        conn.execute(
+            __import__("sqlalchemy").text(
+                "ALTER TABLE cards ADD COLUMN user_reply_question TEXT"
             )
         )

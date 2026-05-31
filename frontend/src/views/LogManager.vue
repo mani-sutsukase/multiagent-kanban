@@ -6,7 +6,8 @@
         <select v-model="filterStatus" class="filter-select" @change="fetchData">
           <option value="">全部状态</option>
           <option value="completed">已完成</option>
-          <option value="blocked">异常</option>
+          <option value="errored">异常</option>
+          <option value="blocked">阻塞</option>
         </select>
         <button class="btn btn-outline" @click="fetchData">刷新</button>
       </div>
@@ -39,7 +40,7 @@
             <td>{{ swimlaneName(item) }}</td>
             <td>
               <span class="status-tag" :class="item.card_status">
-                {{ item.card_status === 'completed' ? '已完成' : '异常' }}
+                {{ item.card_status === 'completed' ? '已完成' : item.card_status === 'blocked' ? '阻塞' : '异常' }}
               </span>
             </td>
             <td>
@@ -212,6 +213,11 @@ h1 {
 }
 
 .status-tag.blocked {
+  background: #fef9e7;
+  color: #e67e22;
+}
+
+.status-tag.errored {
   background: #fadbd8;
   color: #e74c3c;
 }

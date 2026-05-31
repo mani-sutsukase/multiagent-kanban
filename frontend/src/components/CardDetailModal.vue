@@ -3,7 +3,11 @@
     <div class="dialog dialog-lg">
       <!-- 顶部：标题 + 状态 -->
       <div class="detail-header">
-        <h2>{{ card.title }}</h2>
+        <div class="header-title-area">
+          <h2 v-if="!editing" class="header-title">{{ card.title }}</h2>
+          <input v-else v-model="editTitle" class="title-input" />
+          <button v-if="!editing && card.status !== 'running'" class="btn-icon" @click="startEdit" title="编辑卡片">✏️</button>
+        </div>
         <span class="status-badge" :class="card.status">{{ statusLabel }}</span>
       </div>
 
@@ -14,7 +18,15 @@
           <div class="detail-section">
             <div class="detail-field">
               <label>内容</label>
-              <p>{{ card.content || '(无)' }}</p>
+              <p v-if="!editing">{{ card.content || '(无)' }}</p>
+              <textarea v-else v-model="editContent" class="edit-textarea" rows="6" placeholder="输入卡片内容..."></textarea>
+              <div v-if="editing" class="detail-field skip-perm-edit">
+                <label class="checkbox-label">
+                  <input type="checkbox" v-model="editSkipPermissions" />
+                  <span class="checkbox-text">跳过文件权限限制</span>
+                  <span class="field-hint">Claude 可读写项目根目录下任意文件（谨慎使用）</span>
+                </label>
+              </div>
             </div>
             <div class="detail-field">
               <label>模型</label>
@@ -38,9 +50,13 @@
               <label>Claude Session</label>
               <p class="session-id">{{ currentSessionId }}</p>
             </div>
-            <div v-if="card.local_path || hasExtraPaths" class="detail-field">
+            <div v-if="card.local_path || hasExtraPaths || card.dangerously_skip_permissions === '1'" class="detail-field">
               <label>文件访问路径</label>
               <div class="path-info">
+                <div v-if="card.dangerously_skip_permissions === '1'" class="path-info-item">
+                  <span class="path-info-label danger-badge">跳过文件权限限制</span>
+                  <span class="path-info-value">Claude 可访问项目根目录下任意文件</span>
+                </div>
                 <div v-if="card.local_path" class="path-info-item">
                   <span class="path-info-label">工作目录：</span>
                   <span class="path-info-value">{{ card.local_path }}</span>
@@ -81,30 +97,51 @@
 
           <!-- 用户回复区（waiting_for_reply 状态） -->
           <div v-if="card.status === 'waiting_for_reply'" class="detail-section reply-section">
-            <label>回复 Claude</label>
-            <textarea
-              v-model="replyText"
-              class="reply-textarea"
-              placeholder="在此输入你要回复 Claude 的内容..."
-              rows="4"
-            ></textarea>
-            <div class="reply-actions">
-              <button
-                class="btn btn-primary"
-                :disabled="sendingReply || !replyText.trim()"
-                @click="handleReply"
-              >
-                {{ sendingReply ? '发送中...' : '发送回复' }}
-              </button>
-              <button
-                class="btn btn-success"
-                :disabled="advancingCard"
-                @click="handleAdvance"
-              >
-                {{ advancingCard ? '推进中...' : '推进到下一泳道' }}
-              </button>
+            <!-- 上半部分：Claude 的提问 -->
+            <div class="reply-question-area">
+              <div class="reply-question-label-row">
+                <span class="reply-section-icon">💬</span>
+                <span>Claude 需要你回复</span>
+              </div>
+              <div v-if="card.user_reply_question" class="reply-question">
+                <p class="reply-question-text">{{ card.user_reply_question }}</p>
+              </div>
             </div>
-            <p v-if="replyError" class="status-error">{{ replyError }}</p>
+            <!-- 下半部分：用户回复输入 -->
+            <div class="reply-input-area">
+              <textarea
+                v-model="replyText"
+                class="reply-textarea"
+                placeholder="在此输入你要回复 Claude 的内容..."
+                rows="3"
+              ></textarea>
+              <div class="reply-actions">
+                <button
+                  class="btn btn-primary"
+                  :disabled="sendingReply || !replyText.trim()"
+                  @click="handleReply"
+                >
+                  {{ sendingReply ? '发送中...' : '发送回复' }}
+                </button>
+                <button
+                  class="btn btn-advance"
+                  :disabled="advancingCard"
+                  @click="handleAdvance"
+                >
+                  {{ advancingCard ? '推进中...' : '推进到下一泳道' }}
+                </button>
+              </div>
+              <p v-if="replyError" class="status-error">{{ replyError }}</p>
+            </div>
+          </div>
+
+          <!-- 编辑模式操作按钮 -->
+          <div v-if="editing" class="edit-actions">
+            <button class="btn btn-cancel" @click="cancelEdit">取消</button>
+            <button class="btn btn-primary" :disabled="savingEdit || !editTitle.trim()" @click="handleSaveEdit">
+              {{ savingEdit ? '保存中...' : '保存修改' }}
+            </button>
+            <p v-if="editError" class="status-error">{{ editError }}</p>
           </div>
 
           <div class="dialog-actions">
@@ -124,7 +161,8 @@
                 <option value="pending">待执行</option>
                 <option value="running">执行中</option>
                 <option value="waiting_for_reply">待回复</option>
-                <option value="blocked">异常</option>
+                <option value="blocked">阻塞</option>
+                <option value="errored">异常</option>
                 <option value="completed">已完成</option>
               </select>
               <button class="btn btn-primary" :disabled="changingStatus" @click="handleStatusChange">
@@ -169,13 +207,19 @@ const replyText = ref('')
 const sendingReply = ref(false)
 const advancingCard = ref(false)
 const replyError = ref('')
+const editing = ref(false)
+const editTitle = ref('')
+const editContent = ref('')
+const editSkipPermissions = ref(false)
+const savingEdit = ref(false)
+const editError = ref('')
 let pollTimer = null
 
 const statusLabel = computed(() => {
   const labels = {
     pending: '待执行', running: '执行中', waiting_approval: '待审批',
     approved: '已批准', rejected: '已驳回', waiting_for_reply: '待回复',
-    completed: '已完成', blocked: '异常',
+    completed: '已完成', blocked: '阻塞', errored: '异常',
   }
   return labels[props.card.status] || props.card.status
 })
@@ -297,6 +341,42 @@ function copyText(text) {
   })
 }
 
+function startEdit() {
+  editTitle.value = props.card.title
+  editContent.value = props.card.content || ''
+  editSkipPermissions.value = props.card.dangerously_skip_permissions === '1'
+  editError.value = ''
+  editing.value = true
+}
+
+function cancelEdit() {
+  editing.value = false
+  editTitle.value = ''
+  editContent.value = ''
+  editError.value = ''
+}
+
+async function handleSaveEdit() {
+  const title = editTitle.value.trim()
+  if (!title) return
+  savingEdit.value = true
+  editError.value = ''
+  try {
+    const res = await cardApi.update(props.card.id, {
+      title,
+      content: editContent.value,
+      dangerously_skip_permissions: editSkipPermissions.value,
+    })
+    Object.assign(props.card, res.data)
+    editing.value = false
+    emit('status-changed', { id: props.card.id, status: props.card.status })
+  } catch (e) {
+    editError.value = e.response?.data?.detail || '保存失败'
+  } finally {
+    savingEdit.value = false
+  }
+}
+
 async function handleClean() {
   if (!confirm('确定清理此卡片的所有执行记录？\n执行结果、日志、提示词和输出都将被清除，卡片将重置到第一泳道。')) return
   try {
@@ -307,6 +387,7 @@ async function handleClean() {
     props.card.last_output = null
     props.card.rejection_note = null
     props.card.session_id = null
+    props.card.user_reply_question = null
     logs.value = []
     emit('status-changed', { id: props.card.id, status: 'pending' })
   } catch (e) {
@@ -339,19 +420,28 @@ onUnmounted(() => {
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
 .dialog-lg { background: #fff; border-radius: 12px; padding: 28px; width: 1265px; max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; }
 .detail-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-shrink: 0; }
-h2 { font-size: 20px; color: #2c3e50; }
+.header-title-area { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.header-title { font-size: 20px; color: #2c3e50; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.title-input { flex: 1; font-size: 18px; padding: 6px 10px; border: 1px solid #3498db; border-radius: 6px; outline: none; font-weight: 600; color: #2c3e50; }
+.title-input:focus { box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2); }
+.btn-icon { background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px; border-radius: 4px; line-height: 1; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0; }
+.btn-icon:hover { opacity: 1; background: #f0f2f5; }
+.edit-textarea { width: 100%; padding: 10px; border: 1px solid #3498db; border-radius: 6px; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box; line-height: 1.6; }
+.edit-textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2); }
+.edit-actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
 
 /* 左右两栏布局 */
 .detail-body { display: flex; gap: 24px; flex: 1; min-height: 0; overflow: hidden; }
-.detail-left { flex: 3; overflow-y: auto; min-width: 0; padding-right: 4px; }
-.detail-right { flex: 7; overflow-y: auto; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding-left: 20px; border-left: 1px solid #e8e8e8; }
+.detail-left { flex: 7; overflow-y: auto; min-width: 0; padding-right: 4px; }
+.detail-right { flex: 3; overflow-y: auto; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding-left: 20px; border-left: 1px solid #e8e8e8; }
 
 .status-badge { font-size: 12px; padding: 3px 10px; border-radius: 10px; }
 .status-badge.completed { background: #d5f5e3; color: #27ae60; }
 .status-badge.running { background: #d6eaf8; color: #2980b9; }
 .status-badge.waiting_approval { background: #fef9e7; color: #f39c12; }
 .status-badge.waiting_for_reply { background: #f4ecf7; color: #8e44ad; }
-.status-badge.blocked { background: #fadbd8; color: #e74c3c; }
+.status-badge.blocked { background: #fef9e7; color: #e67e22; }
+.status-badge.errored { background: #fadbd8; color: #e74c3c; }
 .detail-section { margin-bottom: 20px; }
 .detail-field { margin-bottom: 12px; }
 .detail-field label { font-size: 12px; color: #95a5a6; display: block; margin-bottom: 4px; }
@@ -394,6 +484,7 @@ h2 { font-size: 20px; color: #2c3e50; }
 .perm-badge { font-size: 11px; padding: 1px 6px; border-radius: 4px; font-weight: 600; white-space: nowrap; }
 .perm-badge.read_write { color: #27ae60; background: #d5f5e3; }
 .perm-badge.read_only { color: #e67e22; background: #fdebd0; }
+.danger-badge { font-size: 11px; padding: 1px 6px; border-radius: 4px; font-weight: 600; white-space: nowrap; color: #e74c3c; background: #fadbd8; }
 
 /* 提示词 / 输出区块 */
 .section-title { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
@@ -411,15 +502,45 @@ h2 { font-size: 20px; color: #2c3e50; }
 .prompt-content { border-left: 3px solid #3498db; }
 .output-content { border-left: 3px solid #27ae60; }
 
-/* 回复区 */
-.reply-section { padding: 12px; background: #faf5ff; border: 1px solid #e8d5f5; border-radius: 8px; }
-.reply-section > label { font-size: 12px; color: #8e44ad; display: block; margin-bottom: 6px; font-weight: 600; }
-.reply-textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box; }
-.reply-textarea:focus { border-color: #8e44ad; outline: none; box-shadow: 0 0 0 2px rgba(142, 68, 173, 0.15); }
-.reply-actions { display: flex; gap: 8px; margin-top: 8px; }
-.btn-success { background: #27ae60; color: #fff; }
-.btn-success:disabled { opacity: 0.6; cursor: not-allowed; }
+/* 回复区 — 上下两层结构 */
+.reply-section {
+  display: flex; flex-direction: column;
+  padding: 0; background: #faf5ff; border: 1px solid #e8d5f5; border-radius: 8px; overflow: hidden;
+}
+/* 上半部分：Claude 的提问 */
+.reply-question-area {
+  padding: 14px 16px 12px; border-bottom: 1px solid #e8d5f5;
+}
+.reply-question-label-row {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: #8e44ad; font-weight: 600; margin-bottom: 10px;
+}
+.reply-section-icon { font-size: 14px; }
+.reply-question { background: #fff; border: 1px solid #d5b8e8; border-radius: 6px; padding: 10px 12px; }
+.reply-question-text { font-size: 14px; color: #4a235a; margin: 0; line-height: 1.6; white-space: pre-wrap; }
+/* 下半部分：用户回复输入 */
+.reply-input-area {
+  padding: 12px 16px 16px;
+}
+.reply-textarea {
+  width: 100%; padding: 10px; border: 1px solid #d5b8e8; border-radius: 6px;
+  font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;
+  min-height: 72px; outline: none;
+}
+.reply-textarea:focus { border-color: #8e44ad; box-shadow: 0 0 0 2px rgba(142, 68, 173, 0.15); }
+.reply-actions { display: flex; gap: 8px; margin-top: 10px; }
+.btn-advance { background: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+.btn-advance:hover { background: #c8e6c9; }
+.btn-advance:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-danger { background: #e74c3c; color: #fff; }
 .btn-danger:hover { background: #c0392b; }
+
+/* 编辑模式：跳过文件权限限制复选框 */
+.skip-perm-edit { margin-top: 12px; }
+.checkbox-label { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; cursor: pointer; user-select: none; padding: 8px 12px; background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; }
+.checkbox-label input[type="checkbox"] { cursor: pointer; }
+.checkbox-text { font-size: 13px; color: #e67e22; font-weight: 600; }
+.field-hint { font-size: 11px; color: #95a5a6; }
+.checkbox-label .field-hint { width: 100%; margin-left: 20px; }
 
 </style>

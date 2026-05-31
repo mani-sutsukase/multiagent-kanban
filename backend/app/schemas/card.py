@@ -10,6 +10,7 @@ class CardCreate(BaseModel):
     local_path: Optional[str] = None
     local_path_permission: str = "read_write"
     allowed_paths: str = "[]"
+    dangerously_skip_permissions: bool = False
 
 
 class CardUpdate(BaseModel):
@@ -17,6 +18,10 @@ class CardUpdate(BaseModel):
     content: Optional[str] = None
     model: Optional[str] = None
     status: Optional[str] = None
+    local_path: Optional[str] = None
+    local_path_permission: Optional[str] = None
+    allowed_paths: Optional[str] = None
+    dangerously_skip_permissions: Optional[bool] = None
 
 
 class CardResponse(BaseModel):
@@ -33,9 +38,11 @@ class CardResponse(BaseModel):
     last_prompt: Optional[str] = None
     last_output: Optional[str] = None
     user_reply: Optional[str] = None
+    user_reply_question: Optional[str] = None
     local_path: Optional[str] = None
     local_path_permission: str = "read_write"
     allowed_paths: str = "[]"
+    dangerously_skip_permissions: str = "0"
     created_at: str
     updated_at: str
 

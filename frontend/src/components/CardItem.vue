@@ -34,20 +34,43 @@
       </div>
       <div v-if="resultDetail" class="result-detail">{{ resultDetail }}</div>
     </div>
+
+    <!-- 终止按钮：仅 running 状态显示 -->
+    <button v-if="card.status === 'running'" class="btn-terminate" @click.stop="handleTerminate" :disabled="terminating">
+      {{ terminating ? '终止中...' : '终止' }}
+    </button>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { logApi } from '../api/log'
+import { cardApi } from '../api/card'
 
 const props = defineProps({
   card: Object,
 })
 
-defineEmits(['click'])
+const emit = defineEmits(['click', 'terminated'])
 
 const isDragging = ref(false)
+const terminating = ref(false)
+
+async function handleTerminate() {
+  if (terminating.value) return
+  terminating.value = true
+  try {
+    await cardApi.terminate(props.card.id)
+    props.card.status = 'blocked'
+    props.card.result = '用户手动终止执行'
+    emit('terminated', props.card.id)
+  } catch (e) {
+    console.error('终止失败:', e)
+    alert('终止失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    terminating.value = false
+  }
+}
 
 function onDragStart(e) {
   isDragging.value = true
@@ -78,7 +101,8 @@ const statusLabel = computed(() => {
     approved: '已批准',
     rejected: '已驳回',
     completed: '已完成',
-    blocked: '异常',
+    blocked: '阻塞',
+    errored: '异常',
   }
   return labels[props.card.status] || props.card.status
 })
@@ -121,7 +145,7 @@ const resultDetail = computed(() => {
 })
 
 async function fetchLogs() {
-  if (!['completed', 'blocked', 'running'].includes(props.card.status)) return
+  if (!['completed', 'blocked', 'errored', 'running', 'waiting_for_reply'].includes(props.card.status)) return
   loadingLog.value = true
   try {
     const res = await logApi.list(props.card.id)
@@ -134,6 +158,17 @@ async function fetchLogs() {
 }
 
 onMounted(fetchLogs)
+
+// 状态变化时自动刷新日志预览
+watch(() => props.card.status, (newStatus, oldStatus) => {
+  if (newStatus !== oldStatus) {
+    // 切换到 pending 时清除旧日志（卡片进入新泳道重新执行）
+    if (newStatus === 'pending') {
+      logs.value = []
+    }
+    fetchLogs()
+  }
+})
 </script>
 
 <style scoped>
@@ -172,6 +207,10 @@ onMounted(fetchLogs)
 }
 
 .card-item.blocked {
+  border-left: 4px solid #e67e22;
+}
+
+.card-item.errored {
   border-left: 4px solid #e74c3c;
 }
 
@@ -203,7 +242,8 @@ onMounted(fetchLogs)
 .status-badge.approved { background: #d5f5e3; color: #27ae60; }
 .status-badge.rejected { background: #fadbd8; color: #e74c3c; }
 .status-badge.completed { background: #d5f5e3; color: #27ae60; }
-.status-badge.blocked { background: #fadbd8; color: #e74c3c; }
+.status-badge.blocked { background: #fef9e7; color: #e67e22; }
+.status-badge.errored { background: #fadbd8; color: #e74c3c; }
 
 .model {
   font-size: 11px;
@@ -325,5 +365,27 @@ onMounted(fetchLogs)
   white-space: pre-wrap;
   max-height: 60px;
   overflow-y: auto;
+}
+
+/* 终止按钮 */
+.btn-terminate {
+  margin-top: 8px;
+  width: 100%;
+  padding: 6px 0;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #fadbd8;
+  color: #e74c3c;
+  transition: background 0.15s;
+}
+.btn-terminate:hover:not(:disabled) {
+  background: #f5b7b1;
+}
+.btn-terminate:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

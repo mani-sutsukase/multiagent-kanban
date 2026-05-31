@@ -66,12 +66,19 @@
                     <option value="read_write">读写权限</option>
                     <option value="read_only">只读权限</option>
                   </select>
-                  <button class="btn-sm btn-danger" type="button" @click="allowedPathsArr.splice(idx, 1)">× 删除</button>
+                  <button class="btn-sm btn-danger" type="button" @click="allowedPathsArr.splice(idx, 1)">×</button>
                 </div>
               </div>
               <button class="btn-sm btn-browse" type="button" @click="allowedPathsArr.push({ path: '', permission: 'read_only' })">+ 添加路径</button>
             </div>
           </div>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="skipPermissions" />
+            <span class="checkbox-text">跳过文件权限限制 (<code>--dangerously-skip-permissions</code>)</span>
+            <span class="field-hint">启用后 Claude 可读写项目根目录下任意文件（谨慎使用）</span>
+          </label>
         </div>
         <div class="dialog-actions">
           <button type="button" class="btn btn-cancel" @click="$emit('close')">取消</button>
@@ -152,6 +159,7 @@ const showPathConfig = ref(false)
 const localPath = ref('')
 const localPathPermission = ref('read_write')
 const allowedPathsArr = ref([])
+const skipPermissions = ref(false)
 
 // 当modelList就绪后设置默认选中
 function setDefaultModel() {
@@ -170,6 +178,7 @@ async function submit() {
     local_path: localPath.value || null,
     local_path_permission: localPathPermission.value,
     allowed_paths: JSON.stringify(allowedPathsArr.value),
+    dangerously_skip_permissions: skipPermissions.value,
   })
   emit('created')
 }
@@ -300,6 +309,11 @@ h2 { margin-bottom: 20px; font-size: 18px; color: #2c3e50; }
 .btn-danger { background: #fadbd8; color: #e74c3c; }
 .btn-browse { background: #eaf2f8; color: #2980b9; white-space: nowrap; }
 .field-hint { font-size: 11px; color: #95a5a6; }
+.checkbox-label { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; cursor: pointer; user-select: none; padding: 8px 12px; background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; }
+.checkbox-label input[type="checkbox"] { cursor: pointer; }
+.checkbox-text { font-size: 13px; color: #e67e22; font-weight: 600; }
+.checkbox-text code { font-size: 12px; background: #fff3cd; padding: 1px 5px; border-radius: 3px; }
+.checkbox-label .field-hint { width: 100%; margin-left: 20px; }
 .btn { padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
 .btn-primary { background: #3498db; color: #fff; }
 .btn-primary:disabled { background: #bdc3c7; cursor: not-allowed; }

@@ -15,7 +15,8 @@ class CardService:
                           target_swimlane_id: str = None,
                           local_path: str = None,
                           local_path_permission: str = "read_write",
-                          allowed_paths: str = "[]") -> Card:
+                          allowed_paths: str = "[]",
+                          dangerously_skip_permissions: str = "0") -> Card:
         if not target_swimlane_id:
             swimlane_service = SwimlaneService(self.db)
             first = await swimlane_service.get_first_swimlane(kanban_id)
@@ -32,6 +33,7 @@ class CardService:
             local_path=local_path,
             local_path_permission=local_path_permission,
             allowed_paths=allowed_paths,
+            dangerously_skip_permissions=dangerously_skip_permissions,
             status="pending",
         )
         self.db.add(card)
@@ -96,6 +98,7 @@ class CardService:
         card.session_id = None
         card.rejection_note = None
         card.user_reply = None
+        card.user_reply_question = None
 
         # 删除所有日志
         await self.db.execute(delete(Log).where(Log.card_id == card_id))

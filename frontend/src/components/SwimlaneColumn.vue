@@ -21,6 +21,7 @@
         :key="card.id"
         :card="card"
         @click="showCardDetail(card)"
+        @terminated="(cardId) => $emit('cardMoved', { cardId })"
       />
     </div>
   </div>

@@ -52,7 +52,7 @@ class ApprovalService:
         return pending
 
     async def approve(self, card_id: str, note: str = None, ws_manager=None) -> Card | None:
-        """批准卡片，创建批准记录，触发推进"""
+        """批准卡片，创建批准记录，触发推进或授权重新执行"""
         card = await self.db.execute(select(Card).where(Card.id == card_id))
         card = card.scalar_one_or_none()
         if not card or card.status != "waiting_approval":
@@ -68,6 +68,7 @@ class ApprovalService:
         )
         self.db.add(approval)
 
+        # 泳道审批：推进到下一泳道
         new_card = await self.card_engine.handle_approval(card)
 
         if ws_manager:
@@ -107,13 +108,14 @@ class ApprovalService:
         )
         self.db.add(approval)
 
+        # 泳道驳回：重新执行当前泳道（不推进）
         updated_card = await self.card_engine.handle_rejection(card, note)
 
         if ws_manager:
             await ws_manager.broadcast({
                 "type": "card_status_changed",
                 "card_id": card_id,
-                "status": "running",
+                "status": "pending",
                 "swimlane_id": card.current_swimlane_id,
                 "result": None,
             })

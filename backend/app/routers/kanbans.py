@@ -26,6 +26,8 @@ async def list_kanbans(db: AsyncSession = Depends(get_db)):
                 id=s.id, name=s.name, sort_order=s.sort_order,
                 flow_mode=s.flow_mode, local_path=s.local_path, card_count=0,
                 wait_for_reply=s.wait_for_reply,
+                local_path_permission=s.local_path_permission,
+                allowed_paths=s.allowed_paths,
             ))
         result.append(KanbanResponse(
             id=k.id, name=k.name, description=k.description or "",
@@ -62,6 +64,8 @@ async def get_kanban(kanban_id: str, db: AsyncSession = Depends(get_db)):
             prompt=s.prompt, skill=s.skill, tools=s.tools,
             flow_mode=s.flow_mode, local_path=s.local_path, card_count=0,
             wait_for_reply=s.wait_for_reply,
+            local_path_permission=s.local_path_permission,
+            allowed_paths=s.allowed_paths,
         ))
     return KanbanResponse(
         id=kanban.id, name=kanban.name, description=kanban.description or "",

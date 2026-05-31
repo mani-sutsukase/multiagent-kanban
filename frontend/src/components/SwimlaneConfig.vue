@@ -30,6 +30,16 @@
                 </select>
               </div>
             </div>
+            <div class="form-group toggle-group">
+              <label class="toggle-label">
+                <span class="toggle-left">
+                  <input type="checkbox" v-model="swimlane.wait_for_reply" true-value="1" false-value="0" class="toggle-input" />
+                  <span class="toggle-switch"></span>
+                  <span class="toggle-text">Claude 需要回复时等待</span>
+                </span>
+                <span class="field-hint">Claude 可输出 JSON 标记请求用户输入，卡片自动进入「待回复」状态</span>
+              </label>
+            </div>
             <div class="form-group">
               <label>本地工作目录</label>
               <div class="path-row">
@@ -56,7 +66,7 @@
                     <option value="read_write">读写权限</option>
                     <option value="read_only">只读权限</option>
                   </select>
-                  <button class="btn-sm btn-danger" type="button" @click="removeExtraPath(swimlane, apIdx)">× 删除</button>
+                  <button class="btn-sm btn-danger" type="button" @click="removeExtraPath(swimlane, apIdx)">×</button>
                 </div>
               </div>
               <button class="btn-sm btn-browse" type="button" @click="addExtraPath(swimlane)">+ 添加路径</button>
@@ -129,6 +139,7 @@ const localSwimlanes = ref(JSON.parse(JSON.stringify(props.swimlanes)))
 localSwimlanes.value.forEach(sw => {
   if (!sw.local_path_permission) sw.local_path_permission = 'read_write'
   if (!sw.allowed_paths) sw.allowed_paths = '[]'
+  if (!sw.wait_for_reply) sw.wait_for_reply = '1'
   parseAllowedPaths(sw)
 })
 
@@ -212,6 +223,7 @@ function addSwimlane() {
     skill: '',
     tools: '[]',
     flow_mode: 'auto',
+    wait_for_reply: '1',
     local_path: '',
     local_path_permission: 'read_write',
     allowed_paths: '[]',
@@ -243,7 +255,7 @@ async function save() {
         skill: s.skill || null,
         flow_mode: s.flow_mode,
         local_path: s.local_path || null,
-        wait_for_reply: s.wait_for_reply || '0',
+        wait_for_reply: s.wait_for_reply || '1',
         local_path_permission: s.local_path_permission || 'read_write',
         allowed_paths: s.allowed_paths || '[]',
       })
@@ -254,7 +266,7 @@ async function save() {
         skill: s.skill || null,
         flow_mode: s.flow_mode,
         local_path: s.local_path || null,
-        wait_for_reply: s.wait_for_reply || '0',
+        wait_for_reply: s.wait_for_reply || '1',
         local_path_permission: s.local_path_permission || 'read_write',
         allowed_paths: s.allowed_paths || '[]',
       })
@@ -269,7 +281,7 @@ async function save() {
   position: fixed; inset: 0; background: rgba(0,0,0,0.4);
   display: flex; align-items: center; justify-content: center; z-index: 100;
 }
-.dialog-lg { background: #fff; border-radius: 12px; padding: 24px; width: 600px; max-width: 90vw; max-height: 80vh; overflow-y: auto; }
+.dialog-lg { background: #fff; border-radius: 12px; padding: 24px; width: 1200px; max-width: 94vw; max-height: 85vh; overflow-y: auto; }
 h2 { margin-bottom: 20px; font-size: 18px; color: #2c3e50; }
 .swimlane-list { display: flex; flex-direction: column; gap: 16px; }
 .swimlane-config-item { border: 1px solid #eee; border-radius: 8px; padding: 16px; }
@@ -290,6 +302,18 @@ h2 { margin-bottom: 20px; font-size: 18px; color: #2c3e50; }
 .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-browse { background: #eaf2f8; color: #2980b9; white-space: nowrap; }
 .btn-browse:hover { background: #d4e6f1; }
+
+/* 切换开关 — 左右分开 */
+.toggle-group { margin-bottom: 8px; }
+.toggle-label { display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; padding: 8px 12px; background: #f8f9fa; border-radius: 8px; border: 1px solid #eee; }
+.toggle-left { display: flex; align-items: center; gap: 10px; }
+.toggle-input { display: none; }
+.toggle-switch { position: relative; width: 36px; height: 20px; background: #ccc; border-radius: 10px; transition: background 0.2s; flex-shrink: 0; }
+.toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: #fff; border-radius: 50%; transition: transform 0.2s; }
+.toggle-input:checked + .toggle-switch { background: #8e44ad; }
+.toggle-input:checked + .toggle-switch::after { transform: translateX(16px); }
+.toggle-text { font-size: 14px; color: #2c3e50; font-weight: 500; }
+.toggle-label .field-hint { font-size: 12px; color: #95a5a6; text-align: right; }
 
 .path-row { display: flex; gap: 6px; }
 .path-row input { flex: 1; }

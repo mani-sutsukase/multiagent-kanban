@@ -10,4 +10,5 @@ export const cardApi = {
   advance: (id) => client.post(`/cards/${id}/advance`),
   clean: (id) => client.post(`/cards/${id}/clean`),
   move: (id, targetSwimlaneId) => client.post(`/cards/${id}/move`, { target_swimlane_id: targetSwimlaneId }),
+  terminate: (id) => client.post(`/cards/${id}/terminate`),
 }

@@ -49,11 +49,11 @@ async def _safe_execute_card(card: Card, swimlane: Swimlane):
         import traceback
         tb_text = traceback.format_exc()
         print(tb_text)
-        # 未知异常：将卡片设为 blocked，写入失败原因
+        # 未知异常：将卡片设为 errored，写入失败原因
         async with async_session_factory() as db:
             db_card = await db.get(Card, card.id)
             if db_card and db_card.status == "running":
-                db_card.status = "blocked"
+                db_card.status = "errored"
                 db_card.result = f"任务执行失败：系统内部错误\n{tb_text[:2000]}"
                 await db.commit()
 

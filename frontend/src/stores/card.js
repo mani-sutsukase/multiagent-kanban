@@ -40,13 +40,15 @@ export const useCardStore = defineStore('card', {
         this.cards[kanbanId] = this.cards[kanbanId].filter((c) => c.id !== id)
       }
     },
-    updateCardStatus(cardId, status, swimlaneId, result) {
+    updateCardStatus(cardId, status, swimlaneId, result, last_output, user_reply_question) {
       for (const kanbanId in this.cards) {
         const card = this.cards[kanbanId].find((c) => c.id === cardId)
         if (card) {
           card.status = status
           if (swimlaneId !== undefined) card.current_swimlane_id = swimlaneId
           if (result !== undefined) card.result = result
+          if (last_output !== undefined) card.last_output = last_output
+          if (user_reply_question !== undefined) card.user_reply_question = user_reply_question
           break
         }
       }

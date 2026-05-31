@@ -7,7 +7,7 @@
           <div class="header-meta">
             <span class="meta-tag kanban-tag">{{ item.kanban_name }}</span>
             <span class="status-tag" :class="item.card_status">
-              {{ item.card_status === 'completed' ? '已完成' : '异常' }}
+              {{ item.card_status === 'completed' ? '已完成' : item.card_status === 'blocked' ? '阻塞' : '异常' }}
             </span>
           </div>
         </div>
@@ -181,6 +181,11 @@ onMounted(fetchLogs)
 }
 
 .status-tag.blocked {
+  background: #fef9e7;
+  color: #e67e22;
+}
+
+.status-tag.errored {
   background: #fadbd8;
   color: #e74c3c;
 }

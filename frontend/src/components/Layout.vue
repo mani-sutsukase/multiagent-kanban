@@ -157,7 +157,7 @@ onMounted(async () => {
   startHealthPing()
 
   on('card_status_changed', (msg) => {
-    cardStore.updateCardStatus(msg.card_id, msg.status, msg.swimlane_id, msg.result)
+    cardStore.updateCardStatus(msg.card_id, msg.status, msg.swimlane_id, msg.result, msg.last_output, msg.user_reply_question)
   })
 
   on('card_needs_approval', () => {
