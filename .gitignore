@@ -36,5 +36,9 @@ backend/data/*.db
 start-all-err.txt
 start-all-out.txt
 
+# Portable package (pre-built offline runtime)
+portable-python/
+backend/portable-python/
+
 # Logs
 *.log
