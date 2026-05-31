@@ -128,24 +128,47 @@ for /f "usebackq delims=" %%a in ("%PTH_FILE%") do (
 copy /y "%TEMP_PTH%" "%PTH_FILE%" >nul
 del "%TEMP_PTH%"
 
-rem Download and run get-pip.py
+rem Try installing pip (with fallback)
+echo   Installing pip into portable Python...
+
+rem Method 1: download get-pip.py from bootstrap.pypa.io
 set "GET_PIP=%TEMP%\get-pip.py"
-echo   Downloading get-pip.py...
-curl -L -o "%GET_PIP%" "https://bootstrap.pypa.io/get-pip.py" --progress-bar
-if %errorlevel% neq 0 (
-    echo [ERROR] Failed to download get-pip.py.
-    pause
-    exit /b 1
+curl -L -o "%GET_PIP%" "https://bootstrap.pypa.io/get-pip.py" --progress-bar >nul 2>&1
+if %errorlevel% equ 0 (
+    echo   Using get-pip.py...
+    "%PY_EXE%" "%GET_PIP%" --no-warn-script-location
+    if %errorlevel% equ 0 (
+        echo   pip installed via get-pip.py
+        goto :install_deps
+    )
 )
 
-echo   Installing pip...
-"%PY_EXE%" "%GET_PIP%" --no-warn-script-location
+rem Method 2 (fallback): download pip wheel from PyPI and extract manually
+echo   [FALLBACK] bootstrap.pypa.io unreachable, using pip wheel...
+python -m pip download pip --no-deps -d "%TEMP%\pip-wheel" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERROR] Failed to install pip.
+    echo [ERROR] Failed to download pip wheel from PyPI.
     pause
     exit /b 1
 )
-echo   pip installed
+for %%f in ("%TEMP%\pip-wheel\pip-*.whl") do (
+    set "PIP_WHEEL=%%f"
+)
+if not defined PIP_WHEEL (
+    echo [ERROR] No pip wheel found.
+    pause
+    exit /b 1
+)
+mkdir "%PY_DIR%\Lib\site-packages" >nul 2>&1
+python -c "import zipfile; zipfile.ZipFile(r'%PIP_WHEEL%').extractall(r'%PY_DIR%\Lib\site-packages')"
+if %errorlevel% neq 0 (
+    echo [ERROR] Failed to extract pip wheel.
+    pause
+    exit /b 1
+)
+echo   pip installed via wheel injection
+
+:install_deps
 echo.
 
 rem ==================== 4. Install Python packages ====================
