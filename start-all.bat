@@ -6,7 +6,32 @@ echo  Start All - MultiAgent Kanban System
 echo ============================================
 echo.
 
-rem ====== 检查环境是否已搭建 ======
+rem ====== 检测 EXE 模式（单文件可执行） ======
+if exist "dist-exe\MultiAgentKanban.exe" (
+    echo [MODE] EXE package detected - starting single executable...
+    echo.
+    echo   The EXE serves both frontend and backend on one port.
+    echo   Press Ctrl+C in the EXE window to stop.
+    echo.
+    start "MultiAgentKanban" /D "%~dp0" cmd /k "dist-exe\MultiAgentKanban.exe"
+    timeout /t 3 /nobreak >nul
+    echo Opening browser...
+    start http://localhost:8000
+    echo.
+    echo ============================================
+    echo  MultiAgent Kanban started!
+    echo.
+    echo   Open: http://localhost:8000
+    echo   Docs: http://localhost:8000/docs
+    echo.
+    echo  Close the EXE window to stop
+    echo ============================================
+    echo.
+    pause
+    exit /b 0
+)
+
+rem ====== 检测便携包模式 ======
 if exist "backend\portable-python\python.exe" (
     echo [MODE] Portable package detected - skipping setup check
     goto :start_services

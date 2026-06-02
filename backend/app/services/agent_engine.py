@@ -6,6 +6,7 @@ import subprocess
 import sys
 import traceback
 from datetime import datetime, timezone
+from pathlib import Path
 
 # Python 3.14+ on Windows 默认已使用 ProactorEventLoop，无需显式设置
 # 但 create_subprocess_shell 在后台 Task 中可能失败，改用 to_thread + Popen
@@ -120,6 +121,49 @@ _REPLY_MARKER_INSTRUCTION = """
 
 如果不需要用户输入，请不要包含此 JSON 对象。
 """
+
+
+def _save_swimlane_result(card_id: str, swimlane: "Swimlane", output_text: str) -> str | None:
+    """将泳道的执行结果保存到磁盘文件，返回保存的绝对路径"""
+    if not output_text or not output_text.strip():
+        return None
+
+    # backend/data/swimlane_results/{card_id}/
+    # agent_engine.py -> backend/app/services/ -> backend/  (3 层 parent)
+    backend_dir = Path(__file__).parent.parent.parent.resolve()
+    results_dir = backend_dir / "data" / "swimlane_results" / card_id
+    results_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_name = re.sub(r'[\\/:*?"<>|]', '_', swimlane.name or f"swimlane_{swimlane.id}")
+    filename = f"{swimlane.sort_order:03d}_{safe_name}.md"
+    filepath = results_dir / filename
+
+    filepath.write_text(output_text, encoding="utf-8")
+
+    print(f"[agent_engine] 泳道结果已保存: {filepath}", flush=True)
+    return str(filepath)
+
+
+def _get_previous_swimlane_result_path(card_id: str, current_swimlane_sort_order: int) -> str | None:
+    """查找上一泳道的执行结果文件路径
+
+    在 data/swimlane_results/{card_id}/ 下查找文件名以
+    (current_swimlane_sort_order - 1) 为前缀的文件。
+    """
+    if current_swimlane_sort_order <= 0:
+        return None
+
+    backend_dir = Path(__file__).parent.parent.parent.resolve()
+    results_dir = backend_dir / "data" / "swimlane_results" / card_id
+    if not results_dir.is_dir():
+        return None
+
+    prev_order = current_swimlane_sort_order - 1
+    prefix = f"{prev_order:03d}_"
+    for fname in results_dir.iterdir():
+        if fname.name.startswith(prefix):
+            return str(fname)
+    return None
 
 
 def _detect_reply_request_from_json(text: str) -> tuple[bool, str]:
@@ -283,6 +327,14 @@ class AgentEngine:
         # 2c. 禁用文件操作工具指令（避免 BashTool pre-flight 超时导致文件操作不可用）
         parts.append(NO_FILE_TOOLS_INSTRUCTION)
 
+        # 2d. 上一泳道的执行结果路径（仅当存在时）
+        prev_result_path = _get_previous_swimlane_result_path(card.id, swimlane.sort_order)
+        if prev_result_path:
+            parts.append(
+                f"\n\n【上一泳道的执行结果】\n上一泳道完成后的完整输出已保存至：\n{prev_result_path}\n\n"
+                f"你可以使用文件工具读取该文件，了解上一泳道的执行情况。"
+            )
+
         # 3. 审核意见（仅当存在时）
         if card.rejection_note:
             parts.append(
@@ -422,6 +474,11 @@ class AgentEngine:
                 card.user_reply_question = None  # 清除旧的回复标记
                 await db.commit()
                 await db.refresh(card)
+
+                # 保存当前泳道的执行结果到磁盘，供后续泳道读取
+                swimlane_obj = await db.get(Swimlane, swimlane_id)
+                if swimlane_obj and card.last_output:
+                    _save_swimlane_result(card_id, swimlane_obj, card.last_output)
 
                 await card_engine.handle_swimlane_completion(card)
                 broadcast_status = card.status

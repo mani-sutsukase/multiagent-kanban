@@ -40,5 +40,12 @@ start-all-out.txt
 portable-python/
 backend/portable-python/
 
+# PyInstaller EXE build output
+dist-exe/
+build-temp/
+
+# PyInstaller spec files
+*.spec
+
 # Logs
 *.log

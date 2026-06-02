@@ -1,13 +1,16 @@
 import json
 import asyncio
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+from starlette.staticfiles import StaticFiles
 from sqlalchemy import select
 
-from app.config import settings
+from app.config import settings, _get_frontend_dist_path, _is_bundled
 from app.database import init_db, async_session_factory
 from app.websocket_manager import WebSocketManager
 from app.models.card import Card
@@ -206,14 +209,72 @@ async def health():
 async def restart_server():
     """触发 uvicorn --reload 热重启（touch main.py 文件时间戳）"""
     import os
-    import asyncio
     from pathlib import Path
 
     async def _do_restart():
         await asyncio.sleep(0.5)
-        # 更新 main.py 的修改时间，uvicorn 的 --reload 检测到变化后自动重启子进程
         file_path = Path(__file__)
         os.utime(file_path, None)
 
     asyncio.create_task(_do_restart())
     return {"message": "服务器正在重启..."}
+
+
+# ===== 生产模式：提供前端静态文件 =====
+_frontend_dist = _get_frontend_dist_path()
+if _frontend_dist:
+    print(f"[main] 生产模式：前端静态文件来自 {_frontend_dist}")
+
+    # 挂载 /assets/ 等静态资源
+    app.mount("/assets", StaticFiles(directory=str(_frontend_dist / "assets")), name="assets")
+
+    # SPA 回落：所有非 API/WS 的路径返回 index.html
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        # 不拦截 API 和 WebSocket 路径（FastAPI 路由优先匹配）
+        if full_path.startswith("api/") or full_path.startswith("ws"):
+            return JSONResponse(status_code=404, content={"detail": "Not found"})
+        index_path = _frontend_dist / "index.html"
+        if index_path.exists():
+            return HTMLResponse(index_path.read_text(encoding="utf-8"))
+        return JSONResponse(status_code=404, content={"detail": "Frontend not built"})
+
+    @app.get("/", include_in_schema=False)
+    async def serve_spa_root():
+        index_path = _frontend_dist / "index.html"
+        if index_path.exists():
+            return HTMLResponse(index_path.read_text(encoding="utf-8"))
+        return JSONResponse(status_code=404, content={"detail": "Frontend not built"})
+else:
+    print("[main] 开发模式：前端由 Vite 开发服务器提供 (http://localhost:5173)")
+
+
+# ===== 直接运行入口（用于 PyInstaller 打包的 EXE）=====
+def run_server():
+    """启动 uvicorn 服务器"""
+    import uvicorn
+
+    port = 8000
+    # 支持通过命令行参数指定端口：MultiAgentKanban.exe --port 8080
+    if len(sys.argv) > 1:
+        for i, arg in enumerate(sys.argv):
+            if arg == "--port" and i + 1 < len(sys.argv):
+                try:
+                    port = int(sys.argv[i + 1])
+                except ValueError:
+                    pass
+
+    print(f"[main] MultiAgent Kanban 服务器启动于 http://localhost:{port}")
+    print(f"[main] API 文档: http://localhost:{port}/docs")
+    print(f"[main] 按 Ctrl+C 停止服务器")
+    uvicorn.run(
+        "app.main:app" if not _is_bundled() else app,
+        host="0.0.0.0",
+        port=port,
+        log_level="info",
+        reload=not _is_bundled(),  # 源码模式启用热重载，EXE 模式禁用
+    )
+
+
+if __name__ == "__main__":
+    run_server()
