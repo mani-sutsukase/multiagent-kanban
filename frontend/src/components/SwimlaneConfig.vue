@@ -29,6 +29,13 @@
                   <option value="post_approval">执行前审批</option>
                 </select>
               </div>
+              <div class="form-group">
+                <label>泳道类型</label>
+                <select v-model="swimlane.swimlane_type">
+                  <option value="normal">普通泳道</option>
+                  <option value="orchestrator">编排泳道</option>
+                </select>
+              </div>
             </div>
             <div class="form-group toggle-group">
               <label class="toggle-label">
@@ -222,6 +229,7 @@ function addSwimlane() {
     prompt: '',
     skill: '',
     tools: '[]',
+    swimlane_type: 'normal',
     flow_mode: 'auto',
     wait_for_reply: '1',
     local_path: '',
@@ -253,6 +261,7 @@ async function save() {
         name: s.name,
         prompt: s.prompt,
         skill: s.skill || null,
+        swimlane_type: s.swimlane_type || 'normal',
         flow_mode: s.flow_mode,
         local_path: s.local_path || null,
         wait_for_reply: s.wait_for_reply || '1',
@@ -264,6 +273,7 @@ async function save() {
         name: s.name,
         prompt: s.prompt,
         skill: s.skill || null,
+        swimlane_type: s.swimlane_type || 'normal',
         flow_mode: s.flow_mode,
         local_path: s.local_path || null,
         wait_for_reply: s.wait_for_reply || '1',

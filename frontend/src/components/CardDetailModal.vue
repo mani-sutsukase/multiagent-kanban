@@ -143,13 +143,6 @@
             </button>
             <p v-if="editError" class="status-error">{{ editError }}</p>
           </div>
-
-          <div class="dialog-actions">
-            <button class="btn btn-cancel" @click="$emit('close')">关闭</button>
-            <button class="btn btn-danger" @click="handleClean">
-              清理执行记录
-            </button>
-          </div>
         </div>
 
         <!-- 右栏：状态 + 时间线 -->
@@ -182,6 +175,18 @@
           </div>
         </div>
       </div>
+
+      <div class="dialog-footer">
+        <button class="btn btn-cancel" @click="$emit('close')">关闭</button>
+        <div class="dialog-footer-right">
+          <button class="btn btn-danger-outline" @click="handleClean">
+            清理执行记录
+          </button>
+          <button class="btn btn-danger" @click="handleDelete" :disabled="deleting">
+            {{ deleting ? '删除中...' : '删除卡片' }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -190,14 +195,16 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { logApi } from '../api/log'
 import { cardApi } from '../api/card'
+import { useCardStore } from '../stores/card'
 import LogTimeline from './LogTimeline.vue'
 
 const props = defineProps({
   card: Object,
+  kanbanId: String,
   swimlanes: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['close', 'status-changed'])
+const emit = defineEmits(['close', 'status-changed', 'deleted'])
 
 const logs = ref([])
 const newStatus = ref(props.card.status)
@@ -213,6 +220,7 @@ const editContent = ref('')
 const editSkipPermissions = ref(false)
 const savingEdit = ref(false)
 const editError = ref('')
+const deleting = ref(false)
 let pollTimer = null
 
 const statusLabel = computed(() => {
@@ -395,6 +403,24 @@ async function handleClean() {
   }
 }
 
+async function handleDelete() {
+  if (deleting.value) return
+  if (!confirm(`确定删除卡片「${props.card.title}」？\n此操作不可撤销，关联的日志和审批记录也将一并清除。`)) return
+  deleting.value = true
+  try {
+    await cardApi.delete(props.card.id)
+    const cardStore = useCardStore()
+    if (props.kanbanId && cardStore.cards[props.kanbanId]) {
+      cardStore.cards[props.kanbanId] = cardStore.cards[props.kanbanId].filter((c) => c.id !== props.card.id)
+    }
+    emit('deleted', props.card.id)
+  } catch (e) {
+    alert('删除失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    deleting.value = false
+  }
+}
+
 // 卡片状态变化时自动启停轮询
 watch(() => props.card.status, (newVal) => {
   if (newVal === 'running') {
@@ -418,7 +444,7 @@ onUnmounted(() => {
 
 <style scoped>
 .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.dialog-lg { background: #fff; border-radius: 12px; padding: 28px; width: 1265px; max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; overflow: hidden; }
+.dialog-lg { background: #fff; border-radius: 12px; padding: 28px; width: 1265px; max-width: 96vw; max-height: 92vh; display: flex; flex-direction: column; }
 .detail-header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-shrink: 0; }
 .header-title-area { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .header-title { font-size: 20px; color: #2c3e50; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -453,7 +479,8 @@ onUnmounted(() => {
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 .timeline-section h3 { font-size: 14px; color: #555; margin-bottom: 12px; }
 .log-section { margin-bottom: 16px; }
-.dialog-actions { display: flex; justify-content: space-between; margin-top: 16px; gap: 8px; }
+.dialog-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e8e8e8; flex-shrink: 0; }
+.dialog-footer-right { display: flex; gap: 8px; }
 .btn { padding: 8px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
 .btn-cancel { background: #ecf0f1; color: #555; }
 .btn-primary { background: #3498db; color: #fff; }
@@ -534,6 +561,9 @@ onUnmounted(() => {
 .btn-advance:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-danger { background: #e74c3c; color: #fff; }
 .btn-danger:hover { background: #c0392b; }
+.btn-danger-outline { background: #fff; color: #e74c3c; border: 1px solid #e74c3c; }
+.btn-danger-outline:hover { background: #fef5f5; }
+.btn-danger-outline:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* 编辑模式：跳过文件权限限制复选框 */
 .skip-perm-edit { margin-top: 12px; }

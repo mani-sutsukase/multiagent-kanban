@@ -8,6 +8,7 @@
       <div class="header-actions">
         <button class="btn btn-outline" @click="showConfig = true">⚙ 泳道配置</button>
         <button class="btn btn-outline" @click="showOrder = true">↕ 排序</button>
+        <button class="btn btn-outline" @click="exportKanban">↓ 导出</button>
         <button class="btn btn-outline" @click="showSettings = true">📝 设置</button>
         <button class="btn btn-primary" @click="showCreateCard = true">+ 新建卡片</button>
       </div>
@@ -25,6 +26,7 @@
         :kanban-id="route.params.id"
         @card-click="showCardDetail"
         @card-moved="onCardMoved"
+        @card-deleted="onCardDeleted"
       />
     </div>
 
@@ -60,9 +62,11 @@
     <CardDetailModal
       v-if="selectedCard"
       :card="selectedCard"
+      :kanban-id="route.params.id"
       :swimlanes="swimlanes"
       @close="selectedCard = null"
       @status-changed="onCardStatusChanged"
+      @deleted="onCardDeleted"
     />
   </div>
 </template>
@@ -79,6 +83,7 @@ import SwimlaneOrderEditor from '../components/SwimlaneOrderEditor.vue'
 import KanbanSettings from '../components/KanbanSettings.vue'
 import CardDetailModal from '../components/CardDetailModal.vue'
 import { cardApi } from '../api/card'
+import { kanbanApi } from '../api/kanban'
 
 const route = useRoute()
 const router = useRouter()
@@ -122,6 +127,27 @@ function onCardStatusChanged({ id, status }) {
 function onCardMoved() {
   // 拖拽移动卡片后刷新数据
   cardStore.fetchByKanban(route.params.id)
+}
+
+function onCardDeleted() {
+  selectedCard.value = null
+}
+
+async function exportKanban() {
+  try {
+    const res = await kanbanApi.exportKanban(route.params.id)
+    const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `kanban-${route.params.id.slice(0, 8)}.json`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('导出失败: ' + (e.response?.data?.detail || e.message))
+  }
 }
 
 onMounted(refresh)

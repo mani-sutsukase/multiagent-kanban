@@ -11,4 +11,6 @@ export const kanbanApi = {
   deleteSwimlane: (id) => client.delete(`/swimlanes/${id}`),
   reorderSwimlanes: (kanbanId, swimlaneIds) =>
     client.put(`/kanbans/${kanbanId}/swimlanes/order`, { swimlane_ids: swimlaneIds }),
+  exportKanban: (id) => client.get(`/kanbans/${id}/export`),
+  importKanban: (data) => client.post('/kanbans/import', data),
 }

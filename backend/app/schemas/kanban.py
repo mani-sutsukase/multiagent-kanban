@@ -19,6 +19,7 @@ class SwimlaneBrief(BaseModel):
     prompt: str = ""
     skill: Optional[str] = None
     tools: str = "[]"
+    swimlane_type: str = "normal"
     flow_mode: str
     local_path: Optional[str] = None
     wait_for_reply: str = "1"
@@ -47,6 +48,7 @@ class SwimlaneCreate(BaseModel):
     prompt: str = ""
     skill: Optional[str] = None
     tools: str = "[]"
+    swimlane_type: str = "normal"
     flow_mode: str = "auto"
     local_path: Optional[str] = None
     wait_for_reply: str = "1"
@@ -59,6 +61,7 @@ class SwimlaneUpdate(BaseModel):
     prompt: Optional[str] = None
     skill: Optional[str] = None
     tools: Optional[str] = None
+    swimlane_type: Optional[str] = None
     flow_mode: Optional[str] = None
     local_path: Optional[str] = None
     wait_for_reply: Optional[str] = None
@@ -74,6 +77,7 @@ class SwimlaneResponse(BaseModel):
     prompt: str
     skill: Optional[str] = None
     tools: str
+    swimlane_type: str
     flow_mode: str
     local_path: Optional[str] = None
     wait_for_reply: str = "1"
@@ -88,3 +92,36 @@ class SwimlaneResponse(BaseModel):
 
 class SwimlaneOrderRequest(BaseModel):
     swimlane_ids: list[str]
+
+
+# === 导出/导入 Schema ===
+
+class KanbanExportSwimlane(BaseModel):
+    """导出用泳道结构 — 不含 id/kanban_id/created_at/updated_at"""
+    name: str
+    sort_order: int = 0
+    prompt: str = ""
+    skill: Optional[str] = None
+    tools: str = "[]"
+    swimlane_type: str = "normal"
+    flow_mode: str = "auto"
+    local_path: Optional[str] = None
+    wait_for_reply: str = "1"
+    local_path_permission: str = "read_write"
+    allowed_paths: str = "[]"
+
+
+class KanbanImportData(BaseModel):
+    """导入请求"""
+    version: int = 1
+    kanban: KanbanCreate
+    swimlanes: list[KanbanExportSwimlane] = []
+
+
+class KanbanImportResult(BaseModel):
+    """导入结果"""
+    id: str
+    name: str
+    description: str
+    swimlane_count: int
+    message: str = "看板导入成功"

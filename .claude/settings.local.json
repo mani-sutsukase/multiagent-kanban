@@ -34,7 +34,11 @@
       "Bash(openspec:*)",
       "Bash(echo:*)",
       "Bash(C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe:*)",
-      "Skill(superpowers:systematic-debugging)"
+      "Skill(superpowers:systematic-debugging)",
+      "Bash(for:*)",
+      "Bash(do:*)",
+      "Bash(done:*)",
+      "Skill(superpowers:writing-plans)"
     ]
   }
 }

@@ -33,14 +33,9 @@ def _get_frontend_dist_path() -> Path | None:
 
 
 def _get_default_db_path() -> str:
-    """计算默认数据库路径"""
-    if _is_bundled():
-        # PyInstaller 单文件模式：DB 存在 EXE 旁，避免数据写入临时目录
-        root = _get_project_root()
-        data_dir = root / 'data'
-    else:
-        # 源码模式：backend/app/config.py -> backend/ -> backend/data/
-        data_dir = Path(__file__).parent.parent / 'data'
+    """计算默认数据库路径（源码/EXE 统一使用项目根目录下的 data/）"""
+    root = _get_project_root()
+    data_dir = root / 'data'
     data_dir.mkdir(exist_ok=True)
     db_path = data_dir / 'multiagent.db'
     return f"sqlite+aiosqlite:///{db_path.as_posix()}"

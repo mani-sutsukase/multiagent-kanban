@@ -55,6 +55,70 @@ class KanbanService:
         )
         return result.scalar() or 0
 
+    async def export_config(self, kanban_id: str) -> dict | None:
+        """导出看板配置（仅结构，不含卡片等执行数据）"""
+        kanban = await self.get(kanban_id)
+        if not kanban:
+            return None
+        from datetime import datetime, timezone
+        swimlane_service = SwimlaneService(self.db)
+        swimlanes = await swimlane_service.get_kanban_swimlanes(kanban_id)
+        return {
+            "version": 1,
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "kanban": {
+                "name": kanban.name,
+                "description": kanban.description or "",
+            },
+            "swimlanes": [
+                {
+                    "name": s.name,
+                    "sort_order": s.sort_order,
+                    "prompt": s.prompt or "",
+                    "skill": s.skill,
+                    "tools": s.tools or "[]",
+                    "swimlane_type": s.swimlane_type or "normal",
+                    "flow_mode": s.flow_mode,
+                    "local_path": s.local_path,
+                    "wait_for_reply": s.wait_for_reply or "1",
+                    "local_path_permission": s.local_path_permission or "read_write",
+                    "allowed_paths": s.allowed_paths or "[]",
+                }
+                for s in swimlanes
+            ],
+        }
+
+    async def import_config(self, data: dict):
+        """从配置字典导入看板，返回创建的 Kanban ORM 对象"""
+        version = data.get("version", 1)
+        if version != 1:
+            raise ValueError(f"不支持的导出版本: {version}")
+
+        kanban_data = data["kanban"]
+        kanban = await self.create(
+            name=kanban_data["name"],
+            description=kanban_data.get("description", ""),
+        )
+
+        swimlane_service = SwimlaneService(self.db)
+        for sl_data in data.get("swimlanes", []):
+            await swimlane_service.add_swimlane(
+                kanban_id=kanban.id,
+                name=sl_data["name"],
+                prompt=sl_data.get("prompt", ""),
+                skill=sl_data.get("skill"),
+                tools=sl_data.get("tools", "[]"),
+                swimlane_type=sl_data.get("swimlane_type", "normal"),
+                flow_mode=sl_data.get("flow_mode", "auto"),
+                local_path=sl_data.get("local_path"),
+                wait_for_reply=sl_data.get("wait_for_reply", "1"),
+                local_path_permission=sl_data.get("local_path_permission", "read_write"),
+                allowed_paths=sl_data.get("allowed_paths", "[]"),
+            )
+
+        await self.db.refresh(kanban)
+        return kanban
+
 
 class SwimlaneService:
     def __init__(self, db: AsyncSession):
@@ -62,6 +126,7 @@ class SwimlaneService:
 
     async def add_swimlane(self, kanban_id: str, name: str, prompt: str = "",
                            skill: str = None, tools: str = "[]",
+                           swimlane_type: str = "normal",
                            flow_mode: str = "auto",
                            local_path: str = None,
                            wait_for_reply: str = "0",
@@ -80,6 +145,7 @@ class SwimlaneService:
             prompt=prompt,
             skill=skill,
             tools=tools,
+            swimlane_type=swimlane_type,
             flow_mode=flow_mode,
             local_path=local_path,
             local_path_permission=local_path_permission,

@@ -16,7 +16,8 @@ if exist "dist-exe\MultiAgentKanban.exe" (
     start "MultiAgentKanban" /D "%~dp0" cmd /k "dist-exe\MultiAgentKanban.exe"
     timeout /t 3 /nobreak >nul
     echo Opening browser...
-    start http://localhost:8000
+    powershell -Command "Start-Process 'http://localhost:8000'"
+    echo   [如果浏览器未打开，请手动访问 http://localhost:8000]
     echo.
     echo ============================================
     echo  MultiAgent Kanban started!
@@ -101,7 +102,8 @@ echo   Frontend starting...
 timeout /t 3 /nobreak >nul
 
 echo Opening browser...
-start http://localhost:5173
+powershell -Command "Start-Process 'http://localhost:5173'"
+echo   [如果浏览器未打开，请手动访问 http://localhost:5173]
 
 echo.
 echo ============================================

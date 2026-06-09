@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -6,6 +7,7 @@ from app.services.kanban_service import KanbanService, SwimlaneService
 from app.schemas.kanban import (
     KanbanCreate, KanbanUpdate, KanbanResponse, SwimlaneBrief,
     SwimlaneCreate, SwimlaneUpdate, SwimlaneResponse, SwimlaneOrderRequest,
+    KanbanImportData, KanbanImportResult,
 )
 
 router = APIRouter(prefix="/api")
@@ -28,6 +30,7 @@ async def list_kanbans(db: AsyncSession = Depends(get_db)):
                 wait_for_reply=s.wait_for_reply,
                 local_path_permission=s.local_path_permission,
                 allowed_paths=s.allowed_paths,
+                swimlane_type=s.swimlane_type,
             ))
         result.append(KanbanResponse(
             id=k.id, name=k.name, description=k.description or "",
@@ -62,6 +65,7 @@ async def get_kanban(kanban_id: str, db: AsyncSession = Depends(get_db)):
         briefs.append(SwimlaneBrief(
             id=s.id, name=s.name, sort_order=s.sort_order,
             prompt=s.prompt, skill=s.skill, tools=s.tools,
+            swimlane_type=s.swimlane_type,
             flow_mode=s.flow_mode, local_path=s.local_path, card_count=0,
             wait_for_reply=s.wait_for_reply,
             local_path_permission=s.local_path_permission,
@@ -106,13 +110,15 @@ async def add_swimlane(kanban_id: str, data: SwimlaneCreate,
     if not await kanban_service.get(kanban_id):
         raise HTTPException(status_code=404, detail="看板不存在")
     s = await service.add_swimlane(
-        kanban_id, data.name, data.prompt, data.skill, data.tools, data.flow_mode,
+        kanban_id, data.name, data.prompt, data.skill, data.tools,
+        data.swimlane_type, data.flow_mode,
         local_path=data.local_path, wait_for_reply=data.wait_for_reply,
         local_path_permission=data.local_path_permission, allowed_paths=data.allowed_paths,
     )
     return SwimlaneResponse(
         id=s.id, kanban_id=s.kanban_id, name=s.name, sort_order=s.sort_order,
-        prompt=s.prompt, skill=s.skill, tools=s.tools, flow_mode=s.flow_mode,
+        prompt=s.prompt, skill=s.skill, tools=s.tools,
+        swimlane_type=s.swimlane_type, flow_mode=s.flow_mode,
         local_path=s.local_path, wait_for_reply=s.wait_for_reply,
         local_path_permission=s.local_path_permission, allowed_paths=s.allowed_paths,
         created_at=s.created_at, updated_at=s.updated_at,
@@ -129,7 +135,8 @@ async def update_swimlane(swimlane_id: str, data: SwimlaneUpdate,
         raise HTTPException(status_code=404, detail="泳道不存在")
     return SwimlaneResponse(
         id=s.id, kanban_id=s.kanban_id, name=s.name, sort_order=s.sort_order,
-        prompt=s.prompt, skill=s.skill, tools=s.tools, flow_mode=s.flow_mode,
+        prompt=s.prompt, skill=s.skill, tools=s.tools,
+        swimlane_type=s.swimlane_type, flow_mode=s.flow_mode,
         local_path=s.local_path, wait_for_reply=s.wait_for_reply,
         local_path_permission=s.local_path_permission, allowed_paths=s.allowed_paths,
         created_at=s.created_at, updated_at=s.updated_at,
@@ -151,3 +158,41 @@ async def reorder_swimlanes(kanban_id: str, data: SwimlaneOrderRequest,
     service = SwimlaneService(db)
     await service.reorder(kanban_id, data.swimlane_ids)
     return {"message": "泳道顺序已更新"}
+
+
+# === 导出/导入路由 ===
+
+@router.get("/kanbans/{kanban_id}/export")
+async def export_kanban(kanban_id: str, db: AsyncSession = Depends(get_db)):
+    """导出看板配置为 JSON"""
+    service = KanbanService(db)
+    data = await service.export_config(kanban_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="看板不存在")
+    return JSONResponse(
+        content=data,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="kanban-{kanban_id[:8]}.json"',
+        },
+    )
+
+
+@router.post("/kanbans/import", response_model=KanbanImportResult, status_code=201)
+async def import_kanban(data: KanbanImportData, db: AsyncSession = Depends(get_db)):
+    """从 JSON 配置导入看板"""
+    service = KanbanService(db)
+    try:
+        kanban = await service.import_config(data.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    swimlane_service = SwimlaneService(db)
+    swimlanes = await swimlane_service.get_kanban_swimlanes(kanban.id)
+
+    return KanbanImportResult(
+        id=kanban.id,
+        name=kanban.name,
+        description=kanban.description or "",
+        swimlane_count=len(swimlanes),
+    )

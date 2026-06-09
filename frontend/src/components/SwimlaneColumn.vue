@@ -3,6 +3,7 @@
     <div class="swimlane-header">
       <span class="swimlane-name">{{ swimlane.name }}</span>
       <span class="flow-badge" :class="swimlane.flow_mode">{{ flowLabel }}</span>
+      <span v-if="swimlane.swimlane_type === 'orchestrator'" class="orchestrator-badge">编排</span>
     </div>
 
     <div
@@ -20,8 +21,10 @@
         v-for="card in kanbanCards"
         :key="card.id"
         :card="card"
+        :kanban-id="kanbanId"
         @click="showCardDetail(card)"
         @terminated="(cardId) => $emit('cardMoved', { cardId })"
+        @deleted="(cardId) => $emit('cardDeleted', { cardId })"
       />
     </div>
   </div>
@@ -128,6 +131,7 @@ function showCardDetail(card) {
 .flow-badge.auto { background: #d5f5e3; color: #27ae60; }
 .flow-badge.pre_approval { background: #fef9e7; color: #f39c12; }
 .flow-badge.post_approval { background: #ebdef0; color: #8e44ad; }
+.orchestrator-badge { background: #e8daef; color: #8e44ad; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 4px; }
 
 .cards-container {
   flex: 1;

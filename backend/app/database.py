@@ -40,6 +40,8 @@ async def init_db():
         await conn.run_sync(_add_card_dangerously_skip_permissions)
         # 迁移：为 cards 表添加 user_reply_question 列（如果不存在）
         await conn.run_sync(_add_card_user_reply_question)
+        # 迁移：为 swimlanes 表添加 swimlane_type 列（如果不存在）
+        await conn.run_sync(_add_swimlane_type_column)
 
 
 def _add_swimlane_local_path(conn):
@@ -174,5 +176,18 @@ def _add_card_user_reply_question(conn):
         conn.execute(
             __import__("sqlalchemy").text(
                 "ALTER TABLE cards ADD COLUMN user_reply_question TEXT"
+            )
+        )
+
+
+def _add_swimlane_type_column(conn):
+    """为已有数据库添加 swimlane_type 列（幂等）"""
+    from sqlalchemy import inspect
+    inspector = inspect(conn)
+    columns = [c["name"] for c in inspector.get_columns("swimlanes")]
+    if "swimlane_type" not in columns:
+        conn.execute(
+            __import__("sqlalchemy").text(
+                "ALTER TABLE swimlanes ADD COLUMN swimlane_type VARCHAR NOT NULL DEFAULT 'normal'"
             )
         )

@@ -335,6 +335,27 @@ class AgentEngine:
                 f"你可以使用文件工具读取该文件，了解上一泳道的执行情况。"
             )
 
+        # 2e. 编排泳道：注入 MCP 服务器和编排指令
+        if getattr(swimlane, 'swimlane_type', 'normal') == 'orchestrator':
+            # 添加 --mcp-servers 参数
+            import json as _json
+            mcp_config = _json.dumps({
+                "kanban-mcp": {
+                    "url": "http://127.0.0.1:8000/mcp"
+                }
+            })
+            args.extend(["--mcp-servers", mcp_config])
+
+            # 注入编排指令
+            parts.append(
+                "\n\n【编排任务指令】\n"
+                "你是一个看板编排 Agent。你可以通过 MCP 工具调用看板系统的所有 API。\n"
+                "可用的工具包括：创建/查看看板、管理泳道、创建/查看/移动卡片、审批/驳回卡片、\n"
+                "回复等待回复的卡片、管理定时任务、修改系统设置、查看系统状态等。\n"
+                "请根据当前看板状态和任务目标，自主决策并执行操作。\n"
+                "所有工具已通过 MCP 协议注入，你可以直接调用它们。\n"
+            )
+
         # 3. 审核意见（仅当存在时）
         if card.rejection_note:
             parts.append(
@@ -553,8 +574,9 @@ class AgentEngine:
                         "result": claude_error,
                     })
                 return
-            # 如果泳道提示词为空，跳过该泳道，直接推进到下一泳道或完成
-            if not swimlane.prompt or not swimlane.prompt.strip():
+            # 如果泳道提示词为空且不是编排泳道，跳过该泳道
+            is_orchestrator = getattr(swimlane, 'swimlane_type', 'normal') == 'orchestrator'
+            if not is_orchestrator and (not swimlane.prompt or not swimlane.prompt.strip()):
                 async with async_session_factory() as db:
                     card_engine = CardEngine(db)
                     db_card = await db.get(Card, card.id)

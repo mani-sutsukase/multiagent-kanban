@@ -2,7 +2,17 @@
   <div class="kanban-list-page">
     <div class="page-header">
       <h1>看板列表</h1>
-      <button class="btn btn-primary" @click="showCreate = true">+ 新建看板</button>
+      <div class="header-actions">
+        <button class="btn btn-outline" @click="triggerImport">↑ 导入</button>
+        <button class="btn btn-primary" @click="showCreate = true">+ 新建看板</button>
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept=".json,application/json"
+          style="display: none"
+          @change="onFileSelected"
+        />
+      </div>
     </div>
 
     <div v-if="kanbanStore.loading" class="loading">加载中...</div>
@@ -34,9 +44,12 @@
 import { ref, onMounted } from 'vue'
 import { useKanbanStore } from '../stores/kanban'
 import CreateKanbanDialog from '../components/CreateKanbanDialog.vue'
+import { kanbanApi } from '../api/kanban'
 
 const kanbanStore = useKanbanStore()
 const showCreate = ref(false)
+const fileInputRef = ref(null)
+const importing = ref(false)
 
 onMounted(() => {
   kanbanStore.fetchAll()
@@ -44,6 +57,37 @@ onMounted(() => {
 
 function onCreated() {
   showCreate.value = false
+}
+
+function triggerImport() {
+  fileInputRef.value?.click()
+}
+
+async function onFileSelected(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  importing.value = true
+  try {
+    const text = await file.text()
+    const data = JSON.parse(text)
+
+    if (!data.kanban || !data.kanban.name) {
+      throw new Error('无效的配置文件：缺少 kanban.name')
+    }
+    if (!Array.isArray(data.swimlanes)) {
+      throw new Error('无效的配置文件：缺少 swimlanes 数组')
+    }
+
+    const res = await kanbanApi.importKanban(data)
+    await kanbanStore.fetchAll()
+    alert(`看板「${res.data.name}」导入成功（${res.data.swimlane_count} 个泳道）`)
+  } catch (e) {
+    alert('导入失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    importing.value = false
+    event.target.value = ''
+  }
 }
 </script>
 
@@ -62,6 +106,12 @@ function onCreated() {
 h1 {
   font-size: 24px;
   color: #2c3e50;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .kanban-grid {
@@ -122,5 +172,15 @@ h1 {
 
 .btn-primary:hover {
   background: #2980b9;
+}
+
+.btn-outline {
+  background: #fff;
+  border: 1px solid #ddd;
+  color: #555;
+}
+
+.btn-outline:hover {
+  background: #f5f5f5;
 }
 </style>

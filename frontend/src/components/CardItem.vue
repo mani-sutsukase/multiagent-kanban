@@ -7,7 +7,10 @@
     @dragstart="onDragStart"
     @dragend="onDragEnd"
   >
-    <div class="card-title">{{ card.title }}</div>
+    <div class="card-title-row">
+      <span class="card-title">{{ card.title }}</span>
+      <button class="btn-delete-icon" @click.stop="handleDelete" :disabled="deleting" title="删除卡片">🗑️</button>
+    </div>
     <div class="card-meta">
       <span class="status-badge" :class="card.status">{{ statusLabel }}</span>
       <span class="model">{{ card.model }}</span>
@@ -39,6 +42,11 @@
     <button v-if="card.status === 'running'" class="btn-terminate" @click.stop="handleTerminate" :disabled="terminating">
       {{ terminating ? '终止中...' : '终止' }}
     </button>
+
+    <!-- 删除按钮 -->
+    <button class="btn-delete" @click.stop="handleDelete" :disabled="deleting">
+      {{ deleting ? '删除中...' : '删除' }}
+    </button>
   </div>
 </template>
 
@@ -46,15 +54,18 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { logApi } from '../api/log'
 import { cardApi } from '../api/card'
+import { useCardStore } from '../stores/card'
 
 const props = defineProps({
   card: Object,
+  kanbanId: String,
 })
 
-const emit = defineEmits(['click', 'terminated'])
+const emit = defineEmits(['click', 'terminated', 'deleted'])
 
 const isDragging = ref(false)
 const terminating = ref(false)
+const deleting = ref(false)
 
 async function handleTerminate() {
   if (terminating.value) return
@@ -69,6 +80,25 @@ async function handleTerminate() {
     alert('终止失败: ' + (e.response?.data?.detail || e.message))
   } finally {
     terminating.value = false
+  }
+}
+
+async function handleDelete() {
+  if (deleting.value) return
+  if (!confirm(`确定删除卡片「${props.card.title}」？\n此操作不可撤销，关联的日志和审批记录也将一并清除。`)) return
+  deleting.value = true
+  try {
+    await cardApi.delete(props.card.id)
+    const cardStore = useCardStore()
+    if (props.kanbanId && cardStore.cards[props.kanbanId]) {
+      cardStore.cards[props.kanbanId] = cardStore.cards[props.kanbanId].filter((c) => c.id !== props.card.id)
+    }
+    emit('deleted', props.card.id)
+  } catch (e) {
+    console.error('删除失败:', e)
+    alert('删除失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -218,8 +248,38 @@ watch(() => props.card.status, (newStatus, oldStatus) => {
   font-size: 15px;
   font-weight: 600;
   color: #2c3e50;
-  margin-bottom: 10px;
   word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+
+.card-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.btn-delete-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  opacity: 0.4;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.btn-delete-icon:hover:not(:disabled) {
+  opacity: 1;
+  background: #fef5f5;
+}
+.btn-delete-icon:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 .card-meta {
@@ -385,6 +445,29 @@ watch(() => props.card.status, (newStatus, oldStatus) => {
   background: #f5b7b1;
 }
 .btn-terminate:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* 删除按钮 */
+.btn-delete {
+  margin-top: 6px;
+  width: 100%;
+  padding: 6px 0;
+  border: 1px solid #f5c6cb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #fff5f5;
+  color: #c82333;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-delete:hover:not(:disabled) {
+  background: #f8d7da;
+  border-color: #f5c6cb;
+}
+.btn-delete:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

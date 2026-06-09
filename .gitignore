@@ -32,6 +32,7 @@ Thumbs.db
 # Project specific
 *.db
 *.sqlite3
+data/
 backend/data/*.db
 start-all-err.txt
 start-all-out.txt

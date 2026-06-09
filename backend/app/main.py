@@ -1,6 +1,8 @@
 import json
 import asyncio
 import sys
+import threading
+import webbrowser
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -18,6 +20,7 @@ from app.models.kanban import Swimlane
 from app.models.setting import Setting
 from app.services.schedule_engine import schedule_engine
 from app.services.agent_engine import agent_engine
+from app.mcp_server import create_mcp_server
 
 # 全局实例
 ws_manager = WebSocketManager()
@@ -171,6 +174,16 @@ app.include_router(schedules.router)
 app.include_router(settings_router.router)
 app.include_router(browse.router)
 
+# 注册 MCP Server（SSE 传输）
+try:
+    _mcp = create_mcp_server()
+    _mcp_app = _mcp.sse_app()
+    app.mount("/mcp", _mcp_app)
+    print("[main] MCP Server 已挂载到 /mcp")
+except Exception as e:
+    print(f"[main] MCP Server 挂载失败: {e}")
+    print("[main] 请安装 mcp 包: pip install mcp>=1.0.0")
+
 
 # WebSocket 端点
 @app.websocket("/ws")
@@ -267,6 +280,14 @@ def run_server():
     print(f"[main] MultiAgent Kanban 服务器启动于 http://localhost:{port}")
     print(f"[main] API 文档: http://localhost:{port}/docs")
     print(f"[main] 按 Ctrl+C 停止服务器")
+
+    # 自动打开浏览器
+    def _open_browser():
+        import time
+        time.sleep(2)  # 等待服务器就绪
+        webbrowser.open(f"http://localhost:{port}")
+    threading.Thread(target=_open_browser, daemon=True).start()
+
     uvicorn.run(
         "app.main:app" if not _is_bundled() else app,
         host="0.0.0.0",
